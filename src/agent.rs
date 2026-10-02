@@ -33,6 +33,12 @@ pub struct Turn {
     /// Backend session to resume; empty starts a new one. If the backend no
     /// longer has it, the turn runs once in a fresh session.
     pub resume: String,
+    /// Backend session to fork: the new session starts with a copy of that
+    /// session's conversation and its own ID, leaving the source untouched.
+    /// Empty means none; a non-empty `fork_from` with a non-empty `resume` is
+    /// refused. A fork whose source is gone fails with `fork_source_missing`
+    /// rather than starting fresh.
+    pub fork_from: String,
     /// Passed to the [`Recorder`] with every event of this turn.
     pub context: Value,
     pub approver: Arc<dyn Approver>,
@@ -269,8 +275,13 @@ async fn run_turn(
         ));
     }
     control.borrow_and_update();
+    if !turn.fork_from.is_empty() && !turn.resume.is_empty() {
+        return Err(failure(Failure::Refusal, "fork_with_resume", &turn.resume));
+    }
+    // A fork always needs its own process: the live one continues the source.
     let replace = if let Some(s) = slot {
-        s.tainted
+        !turn.fork_from.is_empty()
+            || s.tainted
             || s.process
                 .try_exit()
                 .map_err(|_| failure(Failure::Execution, "backend_wait_failed", &s.session))?
@@ -293,9 +304,14 @@ async fn run_turn(
         context: turn.context.clone(),
     };
     let mut resume = turn.resume.clone();
+    let fork_from = turn.fork_from.clone();
     for fresh_attempt in 0..2 {
         if slot.is_none() {
-            let id = if owner.spec.backend == Backend::Claude && resume.is_empty() {
+            // A forked Claude session reports its new ID itself; until then
+            // the source names it in diagnostics.
+            let id = if !fork_from.is_empty() {
+                fork_from.clone()
+            } else if owner.spec.backend == Backend::Claude && resume.is_empty() {
                 owner.ids.new_session_id()
             } else {
                 resume.clone()
@@ -303,13 +319,13 @@ async fn run_turn(
             let spec = &owner.spec;
             let command = match spec.backend {
                 Backend::Codex => codex::command(spec, &owner.options.disabled_mcp_servers),
-                Backend::Claude => claude::command(spec, &resume, &id),
+                Backend::Claude => claude::command(spec, &resume, &id, &fork_from),
             };
             owner
                 .recorder
                 .record(
                     turn.context.clone(),
-                    json!({"direction":"start","command":command,"resume":resume}),
+                    json!({"direction":"start","command":command,"resume":resume,"fork_from":fork_from}),
                 )
                 .await?;
             let process = owner.launcher.launch(command).map_err(|e| match e {
@@ -325,6 +341,7 @@ async fn run_turn(
                 process,
                 id,
                 resume.clone(),
+                fork_from.clone(),
                 call(&control),
             )?);
             owner.alive.store(true, Ordering::SeqCst);
@@ -363,6 +380,10 @@ async fn run_turn(
                     accepted,
                     backend_session_id: id,
                 })
+            }
+            Err(e) if e.lost && !fork_from.is_empty() => {
+                cleanup(slot, owner).await?;
+                return Err(failure(Failure::Execution, "fork_source_missing", &id));
             }
             Err(e) if e.lost && fresh_attempt == 0 && !resume.is_empty() => {
                 control = s.call.control.clone();

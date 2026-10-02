@@ -119,6 +119,7 @@ fn turn(prompt: &str, approver: Arc<dyn Approver>, output: Option<OutputFormat>)
     Turn {
         prompt: prompt.into(),
         resume: String::new(),
+        fork_from: String::new(),
         context: json!({"job":"j1"}),
         approver,
         output,
@@ -305,4 +306,144 @@ async fn invalid_settings_are_refused() {
         (error.kind, error.code.as_str()),
         (Failure::Refusal, "invalid_backend_configuration")
     );
+}
+
+#[tokio::test]
+async fn a_claude_fork_resumes_the_source_with_fork_session() {
+    let launch = Arc::new(Launch {
+        script: claude(vec!["Forked.", "{\"ok\":true}"]),
+        commands: Mutex::new(vec![]),
+    });
+    let log = Arc::new(Log::default());
+    let agent = Agent::new(
+        spec(Backend::Claude),
+        Options::default(),
+        launch.clone(),
+        Arc::new(Ids),
+        log.clone(),
+    )
+    .unwrap();
+    let approver = Arc::new(Decide(ApprovalDecision::Once, Mutex::new(vec![])));
+    let mut t = turn("Continue.", approver, Some(json_answer()));
+    t.fork_from = "claude-src".into();
+    let reply = agent.run(t).await.unwrap();
+    // The fork gets the ID the backend reports, not the source's.
+    assert_eq!(reply.backend_session_id, "claude-1");
+    let command = launch.commands.lock().unwrap()[0].clone();
+    assert!(
+        command
+            .windows(3)
+            .any(|w| w == ["--resume", "claude-src", "--fork-session"]),
+        "{command:?}"
+    );
+    assert!(!command.contains(&"--session-id".to_string()));
+    let start = log.0.lock().unwrap()[0].clone();
+    assert_eq!(
+        (
+            start["direction"].clone(),
+            start["resume"].clone(),
+            start["fork_from"].clone()
+        ),
+        (json!("start"), json!(""), json!("claude-src"))
+    );
+    agent.close().await.unwrap();
+}
+
+/// A Codex app-server whose thread/fork answers with `fork`: a new thread,
+/// or an error naming the missing source.
+fn codex_forking(fork: Value) -> Script {
+    Arc::new(move |m| {
+        let id = m["id"].clone();
+        match m["method"].as_str() {
+            Some("initialize") => vec![json!({"id":id,"result":{}})],
+            Some("thread/start") => vec![json!({"id":id,"result":{"thread":{"id":"thread-1"}}})],
+            Some("thread/fork") => {
+                let mut reply = fork.clone();
+                reply["id"] = id;
+                vec![reply]
+            }
+            Some("turn/start") => vec![
+                json!({"id":id,"result":{"turn":{"id":"turn-1"}}}),
+                json!({"method":"item/completed","params":{"threadId":"thread-2","turnId":"turn-1","item":{"type":"agentMessage","text":"{\"ok\":true}"}}}),
+                json!({"method":"turn/completed","params":{"threadId":"thread-2","turn":{"id":"turn-1","status":"completed"}}}),
+            ],
+            _ => vec![],
+        }
+    })
+}
+
+#[tokio::test]
+async fn a_codex_fork_calls_thread_fork_and_reports_the_new_thread() {
+    let launch = Arc::new(Launch {
+        script: codex_forking(json!({"result":{"thread":{"id":"thread-2"}}})),
+        commands: Mutex::new(vec![]),
+    });
+    let log = Arc::new(Log::default());
+    let agent = Agent::new(
+        spec(Backend::Codex),
+        Options::default(),
+        launch.clone(),
+        Arc::new(Ids),
+        log.clone(),
+    )
+    .unwrap();
+    let approver = Arc::new(Decide(ApprovalDecision::Deny, Mutex::new(vec![])));
+    let mut t = turn("Continue.", approver, Some(json_answer()));
+    t.fork_from = "thread-src".into();
+    let reply = agent.run(t).await.unwrap();
+    assert_eq!(reply.backend_session_id, "thread-2");
+    let sent: Vec<_> = log
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|e| e["direction"] == "send_intent")
+        .map(|e| e["message"].clone())
+        .collect();
+    let fork = sent.iter().find(|m| m["method"] == "thread/fork").unwrap();
+    assert_eq!(fork["params"]["threadId"], "thread-src");
+    assert_eq!(fork["params"]["cwd"], "/work");
+    assert!(!sent
+        .iter()
+        .any(|m| m["method"] == "thread/start" || m["method"] == "thread/resume"));
+    agent.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_fork_whose_source_is_gone_fails_instead_of_starting_fresh() {
+    let launch = Arc::new(Launch {
+        script: codex_forking(
+            json!({"error":{"code":-32600,"message":"no rollout found for thread id thread-src"}}),
+        ),
+        commands: Mutex::new(vec![]),
+    });
+    let agent = Agent::new(
+        spec(Backend::Codex),
+        Options::default(),
+        launch.clone(),
+        Arc::new(Ids),
+        Arc::new(Log::default()),
+    )
+    .unwrap();
+    let approver = Arc::new(Decide(ApprovalDecision::Deny, Mutex::new(vec![])));
+    let mut t = turn("Continue.", approver.clone(), Some(json_answer()));
+    t.fork_from = "thread-src".into();
+    let error = agent.run(t).await.unwrap_err();
+    assert_eq!(
+        (error.kind, error.code.as_str()),
+        (Failure::Execution, "fork_source_missing")
+    );
+    // One launch only: no silent retry in a fresh session.
+    assert_eq!(launch.commands.lock().unwrap().len(), 1);
+    assert!(!agent.alive());
+    // Forking and resuming at once is contradictory.
+    let mut t = turn("Continue.", approver, None);
+    t.fork_from = "thread-src".into();
+    t.resume = "thread-1".into();
+    let error = agent.run(t).await.unwrap_err();
+    assert_eq!(
+        (error.kind, error.code.as_str()),
+        (Failure::Refusal, "fork_with_resume")
+    );
+    agent.close().await.unwrap();
 }

@@ -78,6 +78,7 @@ pub(crate) struct Session {
     pub options: Options,
     pub session: String,
     pub resume: String,
+    pub fork_from: String,
     pub turn: String,
     pub in_turn: bool,
     pub interrupted: bool,
@@ -110,6 +111,7 @@ impl Session {
         mut process: Box<dyn Child>,
         session: String,
         resume: String,
+        fork_from: String,
         call: Call,
     ) -> Result<Self, Error> {
         let stdin = process.take_stdin();
@@ -180,6 +182,7 @@ impl Session {
             options,
             session,
             resume,
+            fork_from,
             turn: String::new(),
             in_turn: false,
             interrupted: false,
@@ -340,7 +343,7 @@ impl Session {
             let m = self.receive(true).await?;
             if m["id"] == id && m.get("method").is_none() {
                 if m.get("error").is_some() {
-                    if method == "thread/resume"
+                    if matches!(method, "thread/resume" | "thread/fork")
                         && m["error"]["message"]
                             .as_str()
                             .is_some_and(|s| s.contains("no rollout found for thread id"))

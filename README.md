@@ -14,6 +14,11 @@ and `codex app-server` (JSON-RPC), and gives both the same interface:
 - **Interrupts.** `interrupt()` stops the current turn and keeps the session.
 - **Resume.** A turn can resume a backend session; if the backend no longer has
   it, the turn runs once in a fresh session.
+- **Fork.** A turn can fork a backend session (`fork_from`): the new session
+  starts with a copy of the source's conversation under its own ID (Claude
+  `--resume … --fork-session`, Codex `thread/fork`), and the source is left
+  as it was. A source the backend no longer has fails the turn with
+  `fork_source_missing`.
 - **Structured answers.** With an `OutputFormat`, Codex gets your JSON schema
   and Claude gets a format note; if your `accept` check rejects the answer, one
   repair turn asks for it again.
@@ -106,6 +111,7 @@ let reply = agent
     .run(Turn {
         prompt: "What files are here?".into(),
         resume: String::new(),
+        fork_from: String::new(),
         context: serde_json::json!({}),
         approver: Arc::new(Ask),
         output: None,

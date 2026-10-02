@@ -111,7 +111,16 @@ pub(crate) async fn handshake(s: &mut Session) -> Result<(), WireError> {
         params["model"] = json!(s.spec.model);
     }
     let mut thread = Value::Null;
-    if !s.resume.is_empty() {
+    if !s.fork_from.is_empty() {
+        // The fork is a new thread with the source's conversation; a source
+        // that is gone is an error, never a silent fresh start.
+        let mut fork = params.clone();
+        fork["threadId"] = json!(s.fork_from);
+        thread = s.request("thread/fork", fork).await?["thread"].clone();
+        if !thread["id"].is_string() {
+            return Err(WireError::lost());
+        }
+    } else if !s.resume.is_empty() {
         let mut resume = params.clone();
         resume["threadId"] = json!(s.resume);
         thread = s.request("thread/resume", resume).await?["thread"].clone();

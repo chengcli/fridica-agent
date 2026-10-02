@@ -32,9 +32,10 @@ pub fn settings(spec: &Spec) -> Value {
     };
     json!({"disableAllHooks":true,"disableClaudeAiConnectors":true,"enabledPlugins":{},"autoMemoryEnabled":false,"sandbox":sandbox})
 }
-/// The `claude` command line; `resume` continues a session, otherwise a new
-/// session starts with ID `session`.
-pub fn command(spec: &Spec, resume: &str, session: &str) -> Vec<String> {
+/// The `claude` command line; `fork_from` copies that session into a new one,
+/// `resume` continues a session, otherwise a new session starts with ID
+/// `session`.
+pub fn command(spec: &Spec, resume: &str, session: &str, fork_from: &str) -> Vec<String> {
     let p = &spec.policy;
     let mut allowed = "Read,Glob,Grep";
     let mut mode = "default";
@@ -88,11 +89,13 @@ pub fn command(spec: &Spec, resume: &str, session: &str) -> Vec<String> {
     } else {
         args.extend(["--permission-prompt-tool".into(), "stdio".into()]);
     }
-    args.extend(if resume.is_empty() {
-        ["--session-id".into(), session.into()]
+    if !fork_from.is_empty() {
+        args.extend(["--resume".into(), fork_from.into(), "--fork-session".into()]);
+    } else if resume.is_empty() {
+        args.extend(["--session-id".into(), session.into()]);
     } else {
-        ["--resume".into(), resume.into()]
-    });
+        args.extend(["--resume".into(), resume.into()]);
+    }
     if !spec.model.is_empty() {
         args.extend(["--model".into(), spec.model.clone()]);
     }
