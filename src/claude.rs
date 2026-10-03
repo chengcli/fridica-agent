@@ -123,14 +123,33 @@ pub(crate) async fn job(s: &mut Session, prompt: &str) -> Result<String, WireErr
     // ends the turn with an error result carrying HTTP status 429.
     let mut limited: Option<Option<u64>> = None;
     loop {
-        let m = s.receive(false).await?;
+        // A turn that ends without a result after the limit was hit (the
+        // stream closes, the CLI exits) is still the limit, not a failure to
+        // retry at once.
+        let m = match s.receive(false).await {
+            Ok(m) => m,
+            Err(e)
+                if limited.is_some()
+                    && !matches!(
+                        e.kind,
+                        crate::Failure::Interrupted | crate::Failure::Cancelled
+                    ) =>
+            {
+                return Err(WireError::rate_limited(
+                    "claude_rate_limited",
+                    limited.flatten(),
+                ));
+            }
+            Err(e) => return Err(e),
+        };
         let kind = m["type"].as_str().unwrap_or("");
         if kind == "rate_limit_event" && m["rate_limit_info"]["status"] == "rejected" {
-            limited = Some(
-                m["rate_limit_info"]["resetsAt"]
-                    .as_u64()
-                    .or(limited.flatten()),
-            );
+            // Seconds since the epoch; a fractional value is rounded down.
+            let reset = m["rate_limit_info"]["resetsAt"]
+                .as_f64()
+                .filter(|t| t.is_finite() && *t > 0.)
+                .map(|t| t as u64);
+            limited = Some(reset.or(limited.flatten()));
         }
         if kind == "assistant" && m["error"] == "rate_limit" {
             limited = Some(limited.flatten());

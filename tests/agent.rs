@@ -27,6 +27,10 @@ impl Scripted {
             while let Ok(Some(line)) = lines.next_line().await {
                 let message: Value = serde_json::from_str(&line).unwrap();
                 for reply in script(&message) {
+                    // `"__eof"` closes the output, as when the CLI exits.
+                    if reply == json!("__eof") {
+                        return;
+                    }
                     let mut bytes = serde_json::to_vec(&reply).unwrap();
                     bytes.push(b'\n');
                     output.write_all(&bytes).await.unwrap();
@@ -462,6 +466,14 @@ async fn usage_limits_are_rate_limited_failures() {
         ],
         _ => vec![],
     });
+    // The limit hit, then the CLI exits without a result message.
+    let cut_off: Script = Arc::new(|m| match m["type"].as_str() {
+        Some("user") => vec![
+            json!({"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1790973000.5}}),
+            json!("__eof"),
+        ],
+        _ => vec![],
+    });
     let failing: Script = Arc::new(|m| match m["type"].as_str() {
         Some("user") => {
             vec![json!({"type":"result","session_id":"claude-1","is_error":true,"result":"boom"})]
@@ -484,6 +496,14 @@ async fn usage_limits_are_rate_limited_failures() {
         (
             Backend::Claude,
             limited,
+            Failure::RateLimited {
+                retry_at: Some(1790973000),
+            },
+            "claude_rate_limited",
+        ),
+        (
+            Backend::Claude,
+            cut_off,
             Failure::RateLimited {
                 retry_at: Some(1790973000),
             },
