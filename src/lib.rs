@@ -37,6 +37,12 @@ pub enum Failure {
     Refusal,
     Cancelled,
     Interrupted,
+    /// The backend's usage limit stopped the turn. Temporary: retry after
+    /// `retry_at` (Unix seconds) when the backend said, never at once.
+    RateLimited {
+        #[serde(default)]
+        retry_at: Option<u64>,
+    },
 }
 /// A failure with a stable machine-readable code and, when known, the backend
 /// session it happened in.

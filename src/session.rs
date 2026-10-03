@@ -37,6 +37,10 @@ impl WireError {
     pub fn refusal(code: &str) -> Self {
         Self::of(Failure::Refusal, code)
     }
+    /// The backend's usage limit, with its reset time when known.
+    pub fn rate_limited(code: &str, retry_at: Option<u64>) -> Self {
+        Self::of(Failure::RateLimited { retry_at }, code)
+    }
     pub fn interrupted() -> Self {
         Self::of(Failure::Interrupted, "backend_interrupted")
     }

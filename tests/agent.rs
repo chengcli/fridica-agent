@@ -447,3 +447,75 @@ async fn a_fork_whose_source_is_gone_fails_instead_of_starting_fresh() {
     );
     agent.close().await.unwrap();
 }
+
+/// A usage limit is a `RateLimited` failure with its reset time when the
+/// backend gives one, for Claude (rate_limit_event + 429 result) and Codex
+/// (usageLimitExceeded), and is not confused with an ordinary failure.
+#[tokio::test]
+async fn usage_limits_are_rate_limited_failures() {
+    let limited: Script = Arc::new(|m| match m["type"].as_str() {
+        Some("user") => vec![
+            json!({"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","utilization":0.99,"resetsAt":1790973000u64}}),
+            json!({"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1790973000u64}}),
+            json!({"type":"assistant","error":"rate_limit","message":{"content":[]}}),
+            json!({"type":"result","session_id":"claude-1","is_error":true,"api_error_status":429,"result":"You've hit your session limit"}),
+        ],
+        _ => vec![],
+    });
+    let failing: Script = Arc::new(|m| match m["type"].as_str() {
+        Some("user") => {
+            vec![json!({"type":"result","session_id":"claude-1","is_error":true,"result":"boom"})]
+        }
+        _ => vec![],
+    });
+    let codex_limited: Script = Arc::new(|m| {
+        let id = m["id"].clone();
+        match m["method"].as_str() {
+            Some("initialize") => vec![json!({"id":id,"result":{}})],
+            Some("thread/start") => vec![json!({"id":id,"result":{"thread":{"id":"thread-1"}}})],
+            Some("turn/start") => vec![
+                json!({"id":id,"result":{"turn":{"id":"turn-1"}}}),
+                json!({"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed","error":{"message":"usage limit","codexErrorInfo":"usageLimitExceeded"}}}}),
+            ],
+            _ => vec![],
+        }
+    });
+    for (backend, script, kind, code) in [
+        (
+            Backend::Claude,
+            limited,
+            Failure::RateLimited {
+                retry_at: Some(1790973000),
+            },
+            "claude_rate_limited",
+        ),
+        (
+            Backend::Claude,
+            failing,
+            Failure::Execution,
+            "claude_job_failed",
+        ),
+        (
+            Backend::Codex,
+            codex_limited,
+            Failure::RateLimited { retry_at: None },
+            "codex_rate_limited",
+        ),
+    ] {
+        let agent = Agent::new(
+            spec(backend),
+            Options::default(),
+            Arc::new(Launch {
+                script,
+                commands: Mutex::new(vec![]),
+            }),
+            Arc::new(Ids),
+            Arc::new(Log::default()),
+        )
+        .unwrap();
+        let approver = Arc::new(Decide(ApprovalDecision::Deny, Mutex::new(vec![])));
+        let error = agent.run(turn("Go.", approver, None)).await.err().unwrap();
+        assert_eq!((error.kind, error.code.as_str()), (kind, code));
+        let _ = agent.close().await;
+    }
+}

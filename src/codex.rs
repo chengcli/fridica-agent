@@ -198,6 +198,11 @@ pub(crate) async fn job(
 fn turn_error(error: &Value) -> WireError {
     if error["message"] == "model refused" {
         WireError::refusal("backend_refused")
+    } else if error["codexErrorInfo"] == "usageLimitExceeded"
+        || error["codexErrorInfo"].get("usageLimitExceeded").is_some()
+    {
+        // The app-server names the usage limit but not when it resets.
+        WireError::rate_limited("codex_rate_limited", None)
     } else {
         WireError::execution("codex_turn_failed")
     }

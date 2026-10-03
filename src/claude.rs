@@ -118,9 +118,23 @@ pub(crate) async fn job(s: &mut Session, prompt: &str) -> Result<String, WireErr
     if s.interrupted {
         s.send_interrupt().await?;
     }
+    // A usage limit: Claude Code says so in a rejected rate_limit_event (with
+    // its reset time) and an assistant message with error "rate_limit", then
+    // ends the turn with an error result carrying HTTP status 429.
+    let mut limited: Option<Option<u64>> = None;
     loop {
         let m = s.receive(false).await?;
         let kind = m["type"].as_str().unwrap_or("");
+        if kind == "rate_limit_event" && m["rate_limit_info"]["status"] == "rejected" {
+            limited = Some(
+                m["rate_limit_info"]["resetsAt"]
+                    .as_u64()
+                    .or(limited.flatten()),
+            );
+        }
+        if kind == "assistant" && m["error"] == "rate_limit" {
+            limited = Some(limited.flatten());
+        }
         if ["system", "result"].contains(&kind) {
             if let Some(id) = m["session_id"].as_str() {
                 s.session = id.into();
@@ -139,8 +153,13 @@ pub(crate) async fn job(s: &mut Session, prompt: &str) -> Result<String, WireErr
             "result" => {
                 s.in_turn = false;
                 if m["is_error"].as_bool() == Some(true) {
+                    if m["api_error_status"] == 429 {
+                        limited = Some(limited.flatten());
+                    }
                     return Err(if s.interrupted {
                         WireError::interrupted()
+                    } else if let Some(retry_at) = limited {
+                        WireError::rate_limited("claude_rate_limited", retry_at)
                     } else {
                         WireError::execution("claude_job_failed")
                     });
