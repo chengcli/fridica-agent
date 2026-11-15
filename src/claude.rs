@@ -84,7 +84,7 @@ pub fn command(spec: &Spec, resume: &str, session: &str, fork_from: &str) -> Vec
         "--tools".into(),
         tools.into(),
         "--allowedTools".into(),
-        allowed.into(),
+        allowed,
         "--append-system-prompt".into(),
         spec.instructions.clone(),
     ];
