@@ -114,6 +114,7 @@ fn spec(backend: Backend) -> Spec {
         },
         confined: false,
         forbid_mcp: false,
+        mcp_servers: vec![],
         job_timeout: Duration::from_secs(5),
         idle_timeout: Duration::from_secs(5),
         approval_timeout: Duration::from_secs(5),
@@ -537,5 +538,85 @@ async fn usage_limits_are_rate_limited_failures() {
         let error = agent.run(turn("Go.", approver, None)).await.err().unwrap();
         assert_eq!((error.kind, error.code.as_str()), (kind, code));
         let _ = agent.close().await;
+    }
+}
+
+#[test]
+fn explicit_mcp_definitions_replace_ambient_entries_without_reading_secrets() {
+    let mut s = spec(Backend::Codex);
+    s.mcp_servers.push(McpServer {
+        name: "github".into(),
+        command: "/opt/server".into(),
+        args: vec!["stdio".into(), "a\"b".into()],
+        env_vars: vec!["WORKER_TOKEN".into()],
+        auto_approve: false,
+    });
+    let words = codex::command(&s, &["github".into(), "ambient".into()]);
+    let disabled = words
+        .iter()
+        .position(|w| w == "mcp_servers.\"github\".enabled=false")
+        .unwrap();
+    let explicit = words
+        .iter()
+        .position(|w| w.starts_with("mcp_servers.\"github\"={"))
+        .unwrap();
+    assert!(disabled < explicit);
+    assert!(words[explicit].contains("env_vars=[\"WORKER_TOKEN\"]"));
+    assert!(!words[explicit].contains("url="));
+    let words = claude::command(&s, "", "session", "");
+    let index = words.iter().position(|w| w == "--mcp-config").unwrap();
+    let config: Value = serde_json::from_str(&words[index + 1]).unwrap();
+    assert_eq!(
+        config["mcpServers"]["github"]["env"]["WORKER_TOKEN"],
+        "${WORKER_TOKEN:-}"
+    );
+    assert_eq!(config["mcpServers"].as_object().unwrap().len(), 1);
+    assert!(!words.iter().any(|w| w.contains("mcp__github__*")));
+    assert!(!codex::command(&s, &[])
+        .iter()
+        .any(|w| w.contains("default_tools_approval_mode")));
+    s.mcp_servers[0].auto_approve = true;
+    assert!(codex::command(&s, &[])
+        .iter()
+        .any(|w| w.contains("default_tools_approval_mode=\"approve\"")));
+    let words = claude::command(&s, "", "session", "");
+    let index = words.iter().position(|w| w == "--allowedTools").unwrap();
+    assert_eq!(words[index + 1], "Read,Glob,Grep,mcp__github__*");
+    let original = s.clone();
+    s.mcp_servers[0].args.push("--read-only".into());
+    assert_ne!(s, original);
+}
+
+#[tokio::test]
+async fn explicit_mcp_is_rejected_when_forbidden_duplicated_or_invalid() {
+    let server = McpServer {
+        name: "github".into(),
+        command: "server".into(),
+        args: vec![],
+        env_vars: vec![],
+        auto_approve: false,
+    };
+    for kind in 0..4 {
+        let mut s = spec(Backend::Codex);
+        s.mcp_servers = vec![server.clone()];
+        match kind {
+            0 => s.forbid_mcp = true,
+            1 => s.mcp_servers.push(server.clone()),
+            2 => s.mcp_servers[0].name = "invalid.alias".into(),
+            _ => s.mcp_servers[0].env_vars.push("NOT-AN-ENV".into()),
+        }
+        let launch = Arc::new(Launch {
+            script: codex("ok"),
+            commands: Mutex::new(vec![]),
+        });
+        let result = Agent::new(
+            s,
+            Options::default(),
+            launch.clone(),
+            Arc::new(Ids),
+            Arc::new(Log::default()),
+        );
+        assert!(result.is_err());
+        assert!(launch.commands.lock().unwrap().is_empty());
     }
 }

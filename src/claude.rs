@@ -58,6 +58,10 @@ pub fn command(spec: &Spec, resume: &str, session: &str, fork_from: &str) -> Vec
     if p.approvals == "auto" {
         mode = "auto";
     }
+    let mut allowed = allowed.to_owned();
+    for server in spec.mcp_servers.iter().filter(|s| s.auto_approve) {
+        allowed.push_str(&format!(",mcp__{}__*", server.name));
+    }
     let mut args = vec![
         "claude".into(),
         "-p".into(),
@@ -72,7 +76,7 @@ pub fn command(spec: &Spec, resume: &str, session: &str, fork_from: &str) -> Vec
         settings(spec).to_string(),
         "--strict-mcp-config".into(),
         "--mcp-config".into(),
-        "{\"mcpServers\":{}}".into(),
+        mcp_config(spec),
         "--disable-slash-commands".into(),
         "--no-chrome".into(),
         "--permission-mode".into(),
@@ -80,7 +84,7 @@ pub fn command(spec: &Spec, resume: &str, session: &str, fork_from: &str) -> Vec
         "--tools".into(),
         tools.into(),
         "--allowedTools".into(),
-        allowed.into(),
+        allowed,
         "--append-system-prompt".into(),
         spec.instructions.clone(),
     ];
@@ -239,4 +243,24 @@ async fn control(s: &mut Session, m: Value) -> Result<(), WireError> {
         json!({"behavior":"allow","updatedInput":input})
     };
     s.send(json!({"type":"control_response","response":{"subtype":"success","request_id":id,"response":response}})).await
+}
+
+/// Claude expands variable references on the execution target, not in the host.
+fn mcp_config(spec: &Spec) -> String {
+    let servers: serde_json::Map<String, Value> = spec
+        .mcp_servers
+        .iter()
+        .map(|s| {
+            let env: serde_json::Map<String, Value> = s
+                .env_vars
+                .iter()
+                .map(|name| (name.clone(), json!(format!("${{{name}:-}}"))))
+                .collect();
+            (
+                s.name.clone(),
+                json!({"type":"stdio", "command":s.command, "args":s.args, "env":env}),
+            )
+        })
+        .collect();
+    json!({"mcpServers":servers}).to_string()
 }
