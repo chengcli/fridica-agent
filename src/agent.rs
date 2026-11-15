@@ -92,6 +92,15 @@ impl Agent {
         ]
         .iter()
         .any(Duration::is_zero)
+            || (spec.forbid_mcp && !spec.mcp_servers.is_empty())
+            || spec.mcp_servers.iter().any(|s| !s.valid())
+            || spec
+                .mcp_servers
+                .iter()
+                .map(|s| &s.name)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != spec.mcp_servers.len()
             || options.client.name.is_empty()
             || options
                 .disabled_mcp_servers

@@ -102,6 +102,7 @@ let spec = Spec {
     },
     confined: false,
     forbid_mcp: false,
+        mcp_servers: vec![],
     job_timeout: Duration::from_secs(600),
     idle_timeout: Duration::from_secs(1800),
     approval_timeout: Duration::from_secs(300),
@@ -134,3 +135,20 @@ protocols change with their CLIs, so pin the CLI versions you deploy.
 ## License
 
 MIT
+
+## Explicit MCP servers
+
+Set `Spec::mcp_servers` to a list of `McpServer { name, command, args,
+env_vars, auto_approve }` for stdio servers. The default deserialized list is empty. Only
+variable names belong in `env_vars`; the execution target resolves their values.
+Claude uses strict MCP configuration; Codex receives complete server entries.
+The host must disable ambient Codex servers before applying these entries.
+`forbid_mcp` rejects any explicit server before launch. `auto_approve` defaults to
+false. Set it to true only when the host has preauthorized all tools exposed by
+that server: this sets Codex's `default_tools_approval_mode = "approve"` and adds
+Claude's server-specific `--allowedTools` rule. Other tool permission requests
+continue through the existing `Approver`; the driver adds no GitHub-specific policy.
+Changing MCP configuration requires a new agent handle, like other `Spec` changes.
+
+Version 0.4 adds `mcp_servers` to Rust `Spec` literals; use `vec![]` to retain
+existing behavior.

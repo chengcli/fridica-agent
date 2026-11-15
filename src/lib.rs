@@ -75,6 +75,37 @@ pub struct Policy {
     /// Claude only: `host` lets Claude ask for permission, `none` never asks.
     pub claude_prompts: String,
 }
+/// An explicit stdio MCP server. Values of inherited variables never enter the spec.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct McpServer {
+    pub name: String,
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env_vars: Vec<String>,
+    /// Preauthorize tools from this explicitly configured server. Default false.
+    #[serde(default)]
+    pub auto_approve: bool,
+}
+impl McpServer {
+    pub(crate) fn valid(&self) -> bool {
+        !self.name.is_empty()
+            && self
+                .name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
+            && !self.command.is_empty()
+            && !self.command.contains('\0')
+            && self.args.iter().all(|s| !s.contains('\0'))
+            && self.env_vars.iter().all(|s| {
+                !s.is_empty()
+                    && !s.as_bytes()[0].is_ascii_digit()
+                    && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            })
+    }
+}
 /// Everything a driver needs to start and run one backend session.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Spec {
@@ -89,8 +120,12 @@ pub struct Spec {
     /// An external sandbox already confines the process, so the backend's own
     /// sandbox is turned off.
     pub confined: bool,
-    /// Codex only: refuse to start if its configuration enables any MCP server.
+    /// Refuse explicit MCP servers on either backend. Codex also verifies that
+    /// its effective configuration contains no enabled ambient server.
     pub forbid_mcp: bool,
+    /// Only explicitly supplied servers are enabled by the driver.
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServer>,
     pub job_timeout: Duration,
     pub idle_timeout: Duration,
     pub approval_timeout: Duration,
