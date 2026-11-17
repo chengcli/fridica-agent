@@ -1,6 +1,6 @@
 [package]
 name = "fridica-agent"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 rust-version = "1.88"
 description = "Drive Claude Code (stream-json) and Codex (app-server) sessions: approvals, interrupts, resume and structured results"
@@ -12,9 +12,21 @@ categories = ["api-bindings", "asynchronous", "development-tools"]
 
 [features]
 default = []
+search = ["dep:anyhow", "dep:rmcp", "dep:reqwest", "tokio/io-std"]
 github = ["dep:anyhow", "dep:octocrab", "dep:gix", "dep:base64", "dep:percent-encoding", "tokio/io-std", "tokio/process"]
 
+[[bin]]
+name = "fridica-agent"
+path = "src/bin/agent.rs"
+
+[[bin]]
+name = "fridica-agent-search"
+path = "src/bin/search.rs"
+required-features = ["search"]
+
 [dependencies]
+rmcp = { version = "3.10", default-features = false, features = ["client", "server", "transport-io", "transport-streamable-http-client-reqwest"], optional = true }
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls"], optional = true }
 anyhow = { version = "1", optional = true }
 octocrab = { version = "0.54", default-features = false, features = ["default-client", "rustls", "rustls-ring", "rustls-webpki-tokio", "timeout"], optional = true }
 gix = { version = "0.90", default-features = false, features = ["sha1"], optional = true }
