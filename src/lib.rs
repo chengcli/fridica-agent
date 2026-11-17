@@ -2,8 +2,11 @@
 pub mod agent;
 pub mod claude;
 pub mod codex;
+pub mod doctor;
 #[cfg(feature = "github")]
 pub mod github;
+#[cfg(feature = "search")]
+pub mod search;
 mod session;
 
 pub use agent::{Agent, OutputFormat, Reply, Turn};

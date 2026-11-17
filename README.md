@@ -165,3 +165,84 @@ The module supports PR reads, CI checks, reviews (including approvals and change
 requests), comments, branches, file changes, and local Git context using octocrab
 and gitoxide. See [GitHub module details](src/github/README.md) for authentication,
 write semantics, and tests. Fridica packages this as `fridica github-mcp`.
+
+## Literature research with alphaXiv
+
+The optional `search` feature adds `fridica_agent::search` and the Rust
+`fridica-agent-search` executable. It bridges stdio MCP to
+[alphaXiv's Streamable HTTP service](https://www.alphaxiv.org/docs/mcp) at
+`https://api.alphaxiv.org/mcp/v1`; no Node or Python bridge is required.
+
+Install on each execution target (from this checkout before 0.4.2 is published):
+
+```sh
+cargo install --path . --features search --bin fridica-agent-search
+# After publication:
+# cargo install fridica-agent --version 0.4.2 --features search --bin fridica-agent-search
+```
+
+Create an API key in alphaXiv Settings > API Keys and set `ALPHAXIV_TOKEN` in
+the worker's environment. Headless operation uses that key, not browser OAuth.
+Allow network access to `api.alphaxiv.org`. Never put the key in the agent's
+instructions or MCP arguments. The host must make the named variable available
+on the target; this library does not transfer credentials to SSH workers.
+
+Enable `features = ["search"]` in your `fridica-agent` dependency, then attach the
+server to a worker's specification before creating the agent:
+
+```rust
+#[cfg(feature = "search")]
+fn enable_research(spec: &mut fridica_agent::Spec) {
+    spec.mcp_servers.push(fridica_agent::search::alphaxiv("fridica-agent-search"));
+    spec.instructions.push('\n');
+    spec.instructions.push_str(fridica_agent::search::INSTRUCTIONS);
+}
+```
+
+This uses the existing explicit MCP path for both Claude Code and Codex.
+`forbid_mcp` must be false. Tool approval remains under the host's existing
+approval policy (`auto_approve` defaults to false). The feature alone does not
+attach tools to sessions; the host controls placement and enablement.
+
+The bridge discovers the upstream schemas and exposes only paper discovery,
+paper content, PDF queries, paper codebase reads, and researcher lookup tools.
+Library edits and researcher follow/unfollow tools are neither advertised nor
+callable. Schemas and returned citations come from alphaXiv. Its default paper
+content is an AI-generated report; use `fullText=true` or PDF queries to verify
+claims against paper text. Search and analysis consume alphaXiv quota.
+
+Initialization/discovery is bounded to 30 seconds and calls to 180 seconds.
+HTTP redirects and automatic POST retries/session replay are disabled; expired
+sessions require restarting the bridge. MCP cancellation is forwarded upstream.
+The SDK handles JSON/SSE responses and session cleanup. Connection errors use
+fixed diagnostics rather than printing credentials or upstream response bodies.
+
+Run `cargo test --locked --features search` for mock HTTP/SSE coverage. Live
+alphaXiv authentication and quota-dependent searches require your own API key.
+
+## MCP doctor
+
+Install the operator command on the worker machine with both capabilities:
+
+```sh
+cargo install --path . --features github,search --bin fridica-agent --bin fridica-agent-search
+fridica-agent doctor
+fridica-agent doctor --json --timeout 60
+fridica-agent doctor --only github --github-token-env WORKER_GITHUB_TOKEN
+fridica-agent doctor --only alphaxiv
+```
+
+The command checks the local execution user's settings, not an SSH target or
+Fridica daemon configuration. Run it on each worker as that worker's user.
+GitHub uses `GH_TOKEN` (or the named variable), falling back to local `gh auth token`;
+it reads authenticated identity and reports the bundled tool count. alphaXiv
+uses `ALPHAXIV_TOKEN`, authenticates MCP, and lists the available research tools.
+It never publishes a GitHub write, calls research tools, or modifies settings.
+An identity check does not prove write permission to any particular repository.
+
+Both checks run concurrently with a per-service timeout (default 30 seconds,
+maximum 120). Exit code 0 means all selected checks passed, 1 means a check failed,
+timed out, or its Cargo feature was not built; 2 means invalid command arguments.
+JSON has a `checks` array with `service`, `status` (`ok`, `failed`, `timeout`, or
+`not_built`), and a credential-free `message`. Missing features explain how to
+reinstall; failures identify the credential source and endpoint to check.

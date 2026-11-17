@@ -71,22 +71,33 @@ async fn authenticated(token_env: &str) -> Result<Octocrab> {
         .context("GitHub client setup failed")
 }
 
-pub async fn run(options: Options) -> Result<()> {
-    if options.token_env.is_empty()
-        || !options
-            .token_env
+fn validate_token_env(token_env: &str) -> Result<()> {
+    if token_env.is_empty()
+        || !token_env
             .bytes()
             .enumerate()
             .all(|(i, b)| b == b'_' || b.is_ascii_alphabetic() || (i > 0 && b.is_ascii_digit()))
     {
         bail!("invalid token environment variable name");
     }
+    Ok(())
+}
+
+/// Read authenticated identity and validate the bundled tool catalog without writes.
+pub async fn probe(token_env: &str) -> Result<usize> {
+    validate_token_env(token_env)?;
+    let client = authenticated(token_env).await?;
+    client
+        .get::<Value, _, Value>("/user", None)
+        .await
+        .map_err(|_| anyhow::anyhow!("GitHub MCP identity probe failed"))?;
+    Ok(tools::catalog(false).len())
+}
+
+pub async fn run(options: Options) -> Result<()> {
+    validate_token_env(&options.token_env)?;
     if options.probe {
-        let client = authenticated(&options.token_env).await?;
-        client
-            .get::<Value, _, Value>("/user", None)
-            .await
-            .map_err(|_| anyhow::anyhow!("GitHub MCP identity probe failed"))?;
+        probe(&options.token_env).await?;
         println!("fridica-github-mcp:ready");
         return Ok(());
     }
