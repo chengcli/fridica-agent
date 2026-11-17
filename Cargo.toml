@@ -1,6 +1,6 @@
 [package]
 name = "fridica-agent"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 rust-version = "1.88"
 description = "Drive Claude Code (stream-json) and Codex (app-server) sessions: approvals, interrupts, resume and structured results"
@@ -10,12 +10,23 @@ readme = "README.md"
 keywords = ["claude", "codex", "agent", "llm", "automation"]
 categories = ["api-bindings", "asynchronous", "development-tools"]
 
+[features]
+default = []
+github = ["dep:anyhow", "dep:octocrab", "dep:gix", "dep:base64", "dep:percent-encoding", "tokio/io-std", "tokio/process"]
+
 [dependencies]
+anyhow = { version = "1", optional = true }
+octocrab = { version = "0.54", default-features = false, features = ["default-client", "rustls", "rustls-ring", "rustls-webpki-tokio", "timeout"], optional = true }
+gix = { version = "0.90", default-features = false, features = ["sha1"], optional = true }
+base64 = { version = "0.22", optional = true }
+percent-encoding = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["io-util", "macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
+tempfile = "3"
+wiremock = "0.6"
 tokio = { version = "1", features = ["io-util", "macros", "process", "rt-multi-thread", "sync", "time"] }
 
 [lints.rust]

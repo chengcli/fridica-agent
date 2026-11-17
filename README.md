@@ -152,3 +152,16 @@ Changing MCP configuration requires a new agent handle, like other `Spec` change
 
 Version 0.4 adds `mcp_servers` to Rust `Spec` literals; use `vec![]` to retain
 existing behavior.
+
+## GitHub capabilities
+
+Enable `fridica-agent = { version = "0.4.1", features = ["github"] }` to use
+`fridica_agent::github::{Options, run, Server, serve}`. The default feature set
+keeps GitHub dependencies disabled. Hosts supply CLI parsing and decide which
+workers receive these tools; `Options::default()` uses `GH_TOKEN` with local
+`gh auth token` fallback. Set `read_only` to hide and reject writes.
+
+The module supports PR reads, CI checks, reviews (including approvals and change
+requests), comments, branches, file changes, and local Git context using octocrab
+and gitoxide. See [GitHub module details](src/github/README.md) for authentication,
+write semantics, and tests. Fridica packages this as `fridica github-mcp`.
