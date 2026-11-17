@@ -2,6 +2,8 @@
 pub mod agent;
 pub mod claude;
 pub mod codex;
+#[cfg(feature = "github")]
+pub mod github;
 mod session;
 
 pub use agent::{Agent, OutputFormat, Reply, Turn};
