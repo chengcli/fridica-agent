@@ -28,7 +28,7 @@ fn doctor_reports_both_services_and_fails_when_unconfigured() {
     );
     assert_eq!(
         checks[1]["status"],
-        if cfg!(feature = "search") {
+        if cfg!(feature = "alphaxiv") {
             "failed"
         } else {
             "not_built"

@@ -1,9 +1,9 @@
-#![cfg(feature = "search")]
+#![cfg(feature = "alphaxiv")]
 use std::process::Command;
 
 #[test]
 fn missing_key_exits_with_actionable_diagnostic_without_connecting() {
-    let result = Command::new(env!("CARGO_BIN_EXE_fridica-agent-search"))
+    let result = Command::new(env!("CARGO_BIN_EXE_fridica-agent-alphaxiv"))
         .env_remove("ALPHAXIV_TOKEN")
         .output()
         .unwrap();
@@ -16,7 +16,7 @@ fn missing_key_exits_with_actionable_diagnostic_without_connecting() {
 
 #[test]
 fn arguments_never_accept_or_echo_secrets() {
-    let result = Command::new(env!("CARGO_BIN_EXE_fridica-agent-search"))
+    let result = Command::new(env!("CARGO_BIN_EXE_fridica-agent-alphaxiv"))
         .args(["--token", "private-test-value"])
         .output()
         .unwrap();

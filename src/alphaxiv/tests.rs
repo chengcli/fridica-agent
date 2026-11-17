@@ -114,7 +114,7 @@ async fn missing_invalid_credentials_and_redirects_fail_without_disclosure() {
 
 #[test]
 fn attachment_is_explicit_and_contains_only_a_credential_variable_name() {
-    let spec = alphaxiv("/opt/bin/fridica-agent-search");
+    let spec = alphaxiv("/opt/bin/fridica-agent-alphaxiv");
     assert!(spec.valid());
     assert!(!spec.auto_approve);
     assert_eq!(spec.env_vars, vec!["ALPHAXIV_TOKEN"]);

@@ -168,17 +168,21 @@ write semantics, and tests. Fridica packages this as `fridica github-mcp`.
 
 ## Literature research with alphaXiv
 
-The optional `search` feature adds `fridica_agent::search` and the Rust
-`fridica-agent-search` executable. It bridges stdio MCP to
+Version 0.4.3 renames the `search` feature/module to `alphaxiv` and the
+`fridica-agent-search` executable to `fridica-agent-alphaxiv`. Update dependency
+features, Rust imports, and configured executable names when upgrading.
+
+The optional `alphaxiv` feature adds `fridica_agent::alphaxiv` and the Rust
+`fridica-agent-alphaxiv` executable. It bridges stdio MCP to
 [alphaXiv's Streamable HTTP service](https://www.alphaxiv.org/docs/mcp) at
 `https://api.alphaxiv.org/mcp/v1`; no Node or Python bridge is required.
 
-Install on each execution target (from this checkout before 0.4.2 is published):
+Install on each execution target (from this checkout before 0.4.3 is published):
 
 ```sh
-cargo install --path . --features search --bin fridica-agent-search
+cargo install --path . --features alphaxiv --bin fridica-agent-alphaxiv
 # After publication:
-# cargo install fridica-agent --version 0.4.2 --features search --bin fridica-agent-search
+# cargo install fridica-agent --version 0.4.3 --features alphaxiv --bin fridica-agent-alphaxiv
 ```
 
 Create an API key in alphaXiv Settings > API Keys and set `ALPHAXIV_TOKEN` in
@@ -187,15 +191,15 @@ Allow network access to `api.alphaxiv.org`. Never put the key in the agent's
 instructions or MCP arguments. The host must make the named variable available
 on the target; this library does not transfer credentials to SSH workers.
 
-Enable `features = ["search"]` in your `fridica-agent` dependency, then attach the
+Enable `features = ["alphaxiv"]` in your `fridica-agent` dependency, then attach the
 server to a worker's specification before creating the agent:
 
 ```rust
-#[cfg(feature = "search")]
+#[cfg(feature = "alphaxiv")]
 fn enable_research(spec: &mut fridica_agent::Spec) {
-    spec.mcp_servers.push(fridica_agent::search::alphaxiv("fridica-agent-search"));
+    spec.mcp_servers.push(fridica_agent::alphaxiv::alphaxiv("fridica-agent-alphaxiv"));
     spec.instructions.push('\n');
-    spec.instructions.push_str(fridica_agent::search::INSTRUCTIONS);
+    spec.instructions.push_str(fridica_agent::alphaxiv::INSTRUCTIONS);
 }
 ```
 
@@ -217,7 +221,7 @@ sessions require restarting the bridge. MCP cancellation is forwarded upstream.
 The SDK handles JSON/SSE responses and session cleanup. Connection errors use
 fixed diagnostics rather than printing credentials or upstream response bodies.
 
-Run `cargo test --locked --features search` for mock HTTP/SSE coverage. Live
+Run `cargo test --locked --features alphaxiv` for mock HTTP/SSE coverage. Live
 alphaXiv authentication and quota-dependent searches require your own API key.
 
 ## MCP doctor
@@ -225,7 +229,7 @@ alphaXiv authentication and quota-dependent searches require your own API key.
 Install the operator command on the worker machine with both capabilities:
 
 ```sh
-cargo install --path . --features github,search --bin fridica-agent --bin fridica-agent-search
+cargo install --path . --features github,alphaxiv --bin fridica-agent --bin fridica-agent-alphaxiv
 fridica-agent doctor
 fridica-agent doctor --json --timeout 60
 fridica-agent doctor --only github --github-token-env WORKER_GITHUB_TOKEN

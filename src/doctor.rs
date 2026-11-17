@@ -69,7 +69,7 @@ pub async fn run(options: &Options) -> Report {
     }
 }
 
-#[cfg(any(feature = "github", feature = "search", test))]
+#[cfg(any(feature = "github", feature = "alphaxiv", test))]
 async fn bounded(
     service: &'static str,
     timeout: Duration,
@@ -93,7 +93,7 @@ async fn bounded(
         },
     }
 }
-#[cfg(not(all(feature = "github", feature = "search")))]
+#[cfg(not(all(feature = "github", feature = "alphaxiv")))]
 fn not_built(service: &'static str, feature: &str) -> Check {
     Check {
         service,
@@ -116,17 +116,17 @@ async fn github(_options: &Options) -> Check {
     }
 }
 async fn alphaxiv(_options: &Options) -> Check {
-    #[cfg(feature = "search")]
+    #[cfg(feature = "alphaxiv")]
     {
         bounded("alphaxiv", _options.timeout, async {
-            crate::search::probe().await
+            crate::alphaxiv::probe().await
                 .map(|tools| format!("Authenticated MCP at api.alphaxiv.org; {} research tools available; no search performed", tools.len()))
                 .map_err(|_| "alphaXiv check failed; verify ALPHAXIV_TOKEN and access to api.alphaxiv.org".into())
         }).await
     }
-    #[cfg(not(feature = "search"))]
+    #[cfg(not(feature = "alphaxiv"))]
     {
-        not_built("alphaxiv", "search")
+        not_built("alphaxiv", "alphaxiv")
     }
 }
 

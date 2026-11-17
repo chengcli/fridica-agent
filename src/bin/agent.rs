@@ -1,7 +1,7 @@
 use fridica_agent::doctor::{self, Options, Service};
 use std::{process::ExitCode, time::Duration};
 
-const USAGE: &str = "Usage: fridica-agent doctor [--only github|alphaxiv] [--json] [--timeout 1..120] [--github-token-env NAME]\nChecks target-local credentials and connectivity without searches or writes. Install with --features github,search to check both.";
+const USAGE: &str = "Usage: fridica-agent doctor [--only github|alphaxiv] [--json] [--timeout 1..120] [--github-token-env NAME]\nChecks target-local credentials and connectivity without searches or writes. Install with --features github,alphaxiv to check both.";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {

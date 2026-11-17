@@ -1,12 +1,12 @@
 #![doc = include_str!("../README.md")]
 pub mod agent;
+#[cfg(feature = "alphaxiv")]
+pub mod alphaxiv;
 pub mod claude;
 pub mod codex;
 pub mod doctor;
 #[cfg(feature = "github")]
 pub mod github;
-#[cfg(feature = "search")]
-pub mod search;
 mod session;
 
 pub use agent::{Agent, OutputFormat, Reply, Turn};

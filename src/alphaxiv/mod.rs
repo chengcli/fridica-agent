@@ -26,7 +26,7 @@ const TOOLS: &[&str] = &[
 ];
 
 /// Attach to Spec::mcp_servers for either backend. The command must name the
-/// installed fridica-agent-search binary on the execution target. No key values
+/// installed fridica-agent-alphaxiv binary on the execution target. No key values
 /// are serialized; only the target-local environment variable name is forwarded.
 pub fn alphaxiv(command: impl Into<String>) -> crate::McpServer {
     crate::McpServer {
@@ -154,7 +154,7 @@ impl ServerHandler for Research {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new(
-                "fridica-agent-search",
+                "fridica-agent-alphaxiv",
                 env!("CARGO_PKG_VERSION"),
             ))
             .with_instructions(INSTRUCTIONS)
