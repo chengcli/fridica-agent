@@ -224,16 +224,44 @@ fixed diagnostics rather than printing credentials or upstream response bodies.
 Run `cargo test --locked --features alphaxiv` for mock HTTP/SSE coverage. Live
 alphaXiv authentication and quota-dependent searches require your own API key.
 
-## MCP doctor
+## Literature research with NASA SciX
 
-Install the operator command on the worker machine with both capabilities:
+Enable the `scix` Cargo feature on the host. On each worker with Node.js and npm,
+install the Fridica binaries from this checkout:
 
 ```sh
-cargo install --path . --features github,alphaxiv --bin fridica-agent --bin fridica-agent-alphaxiv
+cargo install --locked --path . --features scix --bins
+```
+
+Set `ADS_TOKEN` in the worker environment. The wrapper passes it to the
+[upstream stdio server](https://github.com/adsabs/scix-mcp) as `SCIX_API_TOKEN`.
+The wrapper uses `scix-mcp` when it is on the worker's `PATH`. Otherwise the
+first launch (including `doctor --only scix`) fetches `scix-mcp@1.1.0` into
+the worker user's npm cache. Allow npm registry access for this download
+and access to `api.adsabs.harvard.edu` for SciX queries.
+
+```rust
+#[cfg(feature = "scix")]
+fn enable_scix(spec: &mut fridica_agent::Spec) {
+    use fridica_agent::scix;
+    spec.mcp_servers.push(scix::scix("fridica-agent-scix"));
+}
+```
+
+The server exposes upstream research and library tools. Tool approvals follow
+the host's existing policy.
+
+## MCP doctor
+
+Install the operator command on the worker machine with all three capabilities:
+
+```sh
+cargo install --path . --features github,alphaxiv,scix --bins
 fridica-agent doctor
 fridica-agent doctor --json --timeout 60
 fridica-agent doctor --only github --github-token-env WORKER_GITHUB_TOKEN
 fridica-agent doctor --only alphaxiv
+fridica-agent doctor --only scix
 ```
 
 The command checks the local execution user's settings, not an SSH target or
@@ -241,10 +269,10 @@ Fridica daemon configuration. Run it on each worker as that worker's user.
 GitHub uses `GH_TOKEN` (or the named variable), falling back to local `gh auth token`;
 it reads authenticated identity and reports the bundled tool count. alphaXiv
 uses `ALPHAXIV_TOKEN`, authenticates MCP, and lists the available research tools.
-It never publishes a GitHub write, calls research tools, or modifies settings.
+SciX calls the upstream server’s health check, which requests one record ID to verify authentication.
 An identity check does not prove write permission to any particular repository.
 
-Both checks run concurrently with a per-service timeout (default 30 seconds,
+The checks run concurrently with a per-service timeout (default 30 seconds,
 maximum 120). Exit code 0 means all selected checks passed, 1 means a check failed,
 timed out, or its Cargo feature was not built; 2 means invalid command arguments.
 JSON has a `checks` array with `service`, `status` (`ok`, `failed`, `timeout`, or

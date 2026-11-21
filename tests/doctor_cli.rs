@@ -6,7 +6,7 @@ fn command() -> Command {
     command
 }
 #[test]
-fn doctor_reports_both_services_and_fails_when_unconfigured() {
+fn doctor_reports_all_services_and_fails_when_unconfigured() {
     let result = command()
         .args(["doctor", "--json", "--timeout", "1"])
         .env("GH_TOKEN", "private-test-token\n")
@@ -15,7 +15,16 @@ fn doctor_reports_both_services_and_fails_when_unconfigured() {
     assert_eq!(result.status.code(), Some(1));
     let report: Value = serde_json::from_slice(&result.stdout).unwrap();
     let checks = report["checks"].as_array().unwrap();
-    assert_eq!(checks.len(), 2);
+    assert_eq!(checks.len(), 3);
+    assert_eq!(checks[2]["service"], "scix");
+    assert_eq!(
+        checks[2]["status"],
+        if cfg!(feature = "scix") {
+            "failed"
+        } else {
+            "not_built"
+        }
+    );
     assert_eq!(checks[0]["service"], "github");
     assert_eq!(checks[1]["service"], "alphaxiv");
     assert_eq!(

@@ -1,6 +1,6 @@
 [package]
 name = "fridica-agent"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2021"
 rust-version = "1.88"
 description = "Drive Claude Code (stream-json) and Codex (app-server) sessions: approvals, interrupts, resume and structured results"
@@ -12,6 +12,7 @@ categories = ["api-bindings", "asynchronous", "development-tools"]
 
 [features]
 default = []
+scix = ["dep:anyhow", "dep:rmcp", "tokio/process"]
 alphaxiv = ["dep:anyhow", "dep:rmcp", "dep:reqwest", "tokio/io-std"]
 github = ["dep:anyhow", "dep:octocrab", "dep:gix", "dep:base64", "dep:percent-encoding", "tokio/io-std", "tokio/process"]
 
@@ -23,6 +24,11 @@ path = "src/bin/agent.rs"
 name = "fridica-agent-alphaxiv"
 path = "src/bin/alphaxiv.rs"
 required-features = ["alphaxiv"]
+
+[[bin]]
+name = "fridica-agent-scix"
+path = "src/bin/scix.rs"
+required-features = ["scix"]
 
 [dependencies]
 rmcp = { version = "3.10", default-features = false, features = ["client", "server", "transport-io", "transport-streamable-http-client-reqwest"], optional = true }

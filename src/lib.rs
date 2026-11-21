@@ -7,6 +7,8 @@ pub mod codex;
 pub mod doctor;
 #[cfg(feature = "github")]
 pub mod github;
+#[cfg(feature = "scix")]
+pub mod scix;
 mod session;
 
 pub use agent::{Agent, OutputFormat, Reply, Turn};

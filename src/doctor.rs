@@ -6,6 +6,7 @@ use std::time::Duration;
 pub enum Service {
     Github,
     Alphaxiv,
+    Scix,
 }
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -48,28 +49,28 @@ impl Report {
 
 /// Check selected services concurrently. No search, GitHub write, or permission mutation.
 pub async fn run(options: &Options) -> Report {
-    let (github, alphaxiv) = tokio::join!(
-        async {
-            if options.only != Some(Service::Alphaxiv) {
-                Some(github(options).await)
-            } else {
-                None
-            }
-        },
-        async {
-            if options.only != Some(Service::Github) {
-                Some(alphaxiv(options).await)
-            } else {
-                None
-            }
-        },
+    async fn selected(
+        only: Option<Service>,
+        service: Service,
+        check: impl std::future::Future<Output = Check>,
+    ) -> Option<Check> {
+        if only.is_none() || only == Some(service) {
+            Some(check.await)
+        } else {
+            None
+        }
+    }
+    let (github, alphaxiv, scix) = tokio::join!(
+        selected(options.only, Service::Github, github(options)),
+        selected(options.only, Service::Alphaxiv, alphaxiv(options)),
+        selected(options.only, Service::Scix, scix(options)),
     );
     Report {
-        checks: github.into_iter().chain(alphaxiv).collect(),
+        checks: github.into_iter().chain(alphaxiv).chain(scix).collect(),
     }
 }
 
-#[cfg(any(feature = "github", feature = "alphaxiv", test))]
+#[cfg(any(feature = "github", feature = "alphaxiv", feature = "scix", test))]
 async fn bounded(
     service: &'static str,
     timeout: Duration,
@@ -93,7 +94,7 @@ async fn bounded(
         },
     }
 }
-#[cfg(not(all(feature = "github", feature = "alphaxiv")))]
+#[cfg(not(all(feature = "github", feature = "alphaxiv", feature = "scix")))]
 fn not_built(service: &'static str, feature: &str) -> Check {
     Check {
         service,
@@ -127,6 +128,23 @@ async fn alphaxiv(_options: &Options) -> Check {
     #[cfg(not(feature = "alphaxiv"))]
     {
         not_built("alphaxiv", "alphaxiv")
+    }
+}
+
+async fn scix(_options: &Options) -> Check {
+    #[cfg(feature = "scix")]
+    {
+        bounded("scix", _options.timeout, async {
+            crate::scix::probe()
+                .await
+                .map(|count| format!("SciX authenticated via MCP; {count} registered tools"))
+                .map_err(|err| err.to_string())
+        })
+        .await
+    }
+    #[cfg(not(feature = "scix"))]
+    {
+        not_built("scix", "scix")
     }
 }
 
