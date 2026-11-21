@@ -22,35 +22,7 @@ fn server_command() -> Result<Command> {
         !token.trim().is_empty() && !token.chars().any(char::is_control),
         "set a valid ADS_TOKEN on this worker"
     );
-    let executable = if cfg!(windows) {
-        "scix-mcp.cmd"
-    } else {
-        "scix-mcp"
-    };
-    let installed = std::env::var_os("PATH").and_then(|path| {
-        std::env::split_paths(&path)
-            .map(|dir| dir.join(executable))
-            .find(|file| file.is_file())
-    });
-    let mut command = if let Some(path) = installed {
-        Command::new(path)
-    } else {
-        let mut npm = Command::new(if cfg!(windows) { "npm.cmd" } else { "npm" });
-        // npm exec also consults the current project's dependencies and .npmrc.
-        // Resolve the server in the worker user's environment.
-        let home =
-            std::env::home_dir().ok_or_else(|| anyhow!("cannot locate worker home for npm"))?;
-        npm.current_dir(home).args([
-            "exec",
-            "--yes",
-            "--ignore-scripts",
-            "--prefer-offline",
-            "--package=scix-mcp@1.1.0",
-            "--",
-            "scix-mcp",
-        ]);
-        npm
-    };
+    let mut command = crate::npm_server::command("scix-mcp", "--package=scix-mcp@1.1.0")?;
     command.env_remove(TOKEN_ENV).env("SCIX_API_TOKEN", token);
     Ok(command)
 }
@@ -58,20 +30,7 @@ fn server_command() -> Result<Command> {
 /// Serve MCP on inherited stdio. On Unix, replace the wrapper so the backend
 /// supervises the upstream server process directly.
 pub fn run() -> Result<()> {
-    let mut command = server_command()?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        Err(command.exec().into())
-    }
-    #[cfg(not(unix))]
-    {
-        ensure!(
-            command.status()?.success(),
-            "scix-mcp exited unsuccessfully"
-        );
-        Ok(())
-    }
+    crate::npm_server::run(server_command()?)
 }
 
 /// Exercise the upstream health_check over the same stdio launch path.

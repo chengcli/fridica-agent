@@ -15,7 +15,16 @@ fn doctor_reports_all_services_and_fails_when_unconfigured() {
     assert_eq!(result.status.code(), Some(1));
     let report: Value = serde_json::from_slice(&result.stdout).unwrap();
     let checks = report["checks"].as_array().unwrap();
-    assert_eq!(checks.len(), 3);
+    assert_eq!(checks.len(), 4);
+    assert_eq!(checks[3]["service"], "overleaf");
+    assert_eq!(
+        checks[3]["status"],
+        if cfg!(feature = "overleaf") {
+            "failed"
+        } else {
+            "not_built"
+        }
+    );
     assert_eq!(checks[2]["service"], "scix");
     assert_eq!(
         checks[2]["status"],

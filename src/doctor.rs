@@ -7,6 +7,7 @@ pub enum Service {
     Github,
     Alphaxiv,
     Scix,
+    Overleaf,
 }
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -60,17 +61,29 @@ pub async fn run(options: &Options) -> Report {
             None
         }
     }
-    let (github, alphaxiv, scix) = tokio::join!(
+    let (github, alphaxiv, scix, overleaf) = tokio::join!(
         selected(options.only, Service::Github, github(options)),
         selected(options.only, Service::Alphaxiv, alphaxiv(options)),
         selected(options.only, Service::Scix, scix(options)),
+        selected(options.only, Service::Overleaf, overleaf(options)),
     );
     Report {
-        checks: github.into_iter().chain(alphaxiv).chain(scix).collect(),
+        checks: github
+            .into_iter()
+            .chain(alphaxiv)
+            .chain(scix)
+            .chain(overleaf)
+            .collect(),
     }
 }
 
-#[cfg(any(feature = "github", feature = "alphaxiv", feature = "scix", test))]
+#[cfg(any(
+    feature = "github",
+    feature = "alphaxiv",
+    feature = "scix",
+    feature = "overleaf",
+    test
+))]
 async fn bounded(
     service: &'static str,
     timeout: Duration,
@@ -94,7 +107,12 @@ async fn bounded(
         },
     }
 }
-#[cfg(not(all(feature = "github", feature = "alphaxiv", feature = "scix")))]
+#[cfg(not(all(
+    feature = "github",
+    feature = "alphaxiv",
+    feature = "scix",
+    feature = "overleaf"
+)))]
 fn not_built(service: &'static str, feature: &str) -> Check {
     Check {
         service,
@@ -145,6 +163,23 @@ async fn scix(_options: &Options) -> Check {
     #[cfg(not(feature = "scix"))]
     {
         not_built("scix", "scix")
+    }
+}
+
+async fn overleaf(_options: &Options) -> Check {
+    #[cfg(feature = "overleaf")]
+    {
+        bounded("overleaf", _options.timeout, async {
+            crate::overleaf::probe()
+                .await
+                .map(|count| format!("Overleaf MCP configured; {count} tools available; remote project access untested"))
+                .map_err(|err| err.to_string())
+        })
+        .await
+    }
+    #[cfg(not(feature = "overleaf"))]
+    {
+        not_built("overleaf", "overleaf")
     }
 }
 

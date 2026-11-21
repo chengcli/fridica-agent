@@ -1,7 +1,7 @@
 use fridica_agent::doctor::{self, Options, Service};
 use std::{process::ExitCode, time::Duration};
 
-const USAGE: &str = "Usage: fridica-agent doctor [--only github|alphaxiv|scix] [--json] [--timeout 1..120] [--github-token-env NAME]\nChecks target-local credentials and connectivity using read-only probes. Install with --features github,alphaxiv,scix to check all services.";
+const USAGE: &str = "Usage: fridica-agent doctor [--only github|alphaxiv|scix|overleaf] [--json] [--timeout 1..120] [--github-token-env NAME]\nChecks target-local credentials and connectivity using read-only probes. Install with --features github,alphaxiv,scix,overleaf to check all services.";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
@@ -47,6 +47,7 @@ fn parse(args: &[String]) -> Option<(Options, bool)> {
                     "github" => Service::Github,
                     "alphaxiv" => Service::Alphaxiv,
                     "scix" => Service::Scix,
+                    "overleaf" => Service::Overleaf,
                     _ => return None,
                 })
             }

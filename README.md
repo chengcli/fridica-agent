@@ -251,17 +251,47 @@ fn enable_scix(spec: &mut fridica_agent::Spec) {
 The server exposes upstream research and library tools. Tool approvals follow
 the host's existing policy.
 
-## MCP doctor
+## Overleaf projects
 
-Install the operator command on the worker machine with all three capabilities:
+Enable the `overleaf` Cargo feature on the host. On the worker, install Node.js
+22.14 or newer, npm, and Git, then build the Fridica executables:
 
 ```sh
-cargo install --path . --features github,alphaxiv,scix --bins
+cargo install --locked --path . --features overleaf --bins
+fridica-agent doctor --only overleaf
+```
+
+Set `OVERLEAF_GIT_TOKEN` in the worker environment. Supply the project URL in
+the request, set `OVERLEAF_PROJECT_ID` for a default, or configure aliases with
+`OVERLEAF_PROJECTS`. Workers can also point `OVERLEAF_MCP_ENV_FILE` at the
+absolute path to an upstream configuration file. Git operations need Overleaf
+Git integration. The upstream server also supports cookie-based editor tools
+via `OVERLEAF_SESSION_COOKIE_FILE`. [Overleaf MCP documentation](https://github.com/yangzichao/mcp-server-overleaf)
+
+```rust
+#[cfg(feature = "overleaf")]
+fn enable_overleaf(spec: &mut fridica_agent::Spec) {
+    spec.mcp_servers.push(fridica_agent::overleaf::overleaf("fridica-agent-overleaf"));
+}
+```
+
+The wrapper uses `mcp-server-overleaf` on the worker's PATH or fetches version
+`0.4.1` into the worker's npm cache on first use. Missing credential configuration
+stops startup before the download. The host handles tool approvals, including
+project edits and pushes.
+
+## MCP doctor
+
+Install the operator command on the worker machine with all four capabilities:
+
+```sh
+cargo install --path . --features github,alphaxiv,scix,overleaf --bins
 fridica-agent doctor
 fridica-agent doctor --json --timeout 60
 fridica-agent doctor --only github --github-token-env WORKER_GITHUB_TOKEN
 fridica-agent doctor --only alphaxiv
 fridica-agent doctor --only scix
+fridica-agent doctor --only overleaf
 ```
 
 The command checks the local execution user's settings, not an SSH target or
@@ -270,6 +300,7 @@ GitHub uses `GH_TOKEN` (or the named variable), falling back to local `gh auth t
 it reads authenticated identity and reports the bundled tool count. alphaXiv
 uses `ALPHAXIV_TOKEN`, authenticates MCP, and lists the available research tools.
 SciX calls the upstream server’s health check, which requests one record ID to verify authentication.
+Overleaf lists tools and checks local project configuration. Remote project access is untested.
 An identity check does not prove write permission to any particular repository.
 
 The checks run concurrently with a per-service timeout (default 30 seconds,
