@@ -22,7 +22,35 @@ fn server_command() -> Result<Command> {
         !token.trim().is_empty() && !token.chars().any(char::is_control),
         "set a valid ADS_TOKEN on this worker"
     );
-    let mut command = Command::new("scix-mcp");
+    let executable = if cfg!(windows) {
+        "scix-mcp.cmd"
+    } else {
+        "scix-mcp"
+    };
+    let installed = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path)
+            .map(|dir| dir.join(executable))
+            .find(|file| file.is_file())
+    });
+    let mut command = if let Some(path) = installed {
+        Command::new(path)
+    } else {
+        let mut npm = Command::new(if cfg!(windows) { "npm.cmd" } else { "npm" });
+        // npm exec also consults the current project's dependencies and .npmrc.
+        // Resolve the server in the worker user's environment.
+        let home =
+            std::env::home_dir().ok_or_else(|| anyhow!("cannot locate worker home for npm"))?;
+        npm.current_dir(home).args([
+            "exec",
+            "--yes",
+            "--ignore-scripts",
+            "--prefer-offline",
+            "--package=scix-mcp@1.1.0",
+            "--",
+            "scix-mcp",
+        ]);
+        npm
+    };
     command.env_remove(TOKEN_ENV).env("SCIX_API_TOKEN", token);
     Ok(command)
 }
@@ -54,7 +82,7 @@ pub async fn probe() -> Result<usize> {
         .stderr(Stdio::null())
         .kill_on_drop(true)
         .spawn()
-        .map_err(|_| anyhow!("install scix-mcp on the worker PATH"))?;
+        .map_err(|_| anyhow!("could not launch SciX; check worker PATH for scix-mcp or npm"))?;
     let transport = (child.stdout.take().unwrap(), child.stdin.take().unwrap());
     let server = ().serve(transport).await.map_err(|_| anyhow!("SciX MCP initialization failed"))?;
     let result = server

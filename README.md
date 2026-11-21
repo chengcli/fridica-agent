@@ -226,16 +226,19 @@ alphaXiv authentication and quota-dependent searches require your own API key.
 
 ## Literature research with NASA SciX
 
-Enable the `scix` Cargo feature on the host and install both executables on each worker:
+Enable the `scix` Cargo feature on the host. On each worker with Node.js and npm,
+install the Fridica binaries from this checkout:
 
 ```sh
-npm install --global scix-mcp@1.1.0
-cargo install --path . --features scix --bin fridica-agent-scix
+cargo install --locked --path . --features scix --bins
 ```
 
 Set `ADS_TOKEN` in the worker environment. The wrapper passes it to the
 [upstream stdio server](https://github.com/adsabs/scix-mcp) as `SCIX_API_TOKEN`.
-Version 1.1.0 requires network access to `api.adsabs.harvard.edu`.
+The wrapper uses `scix-mcp` when it is on the worker's `PATH`. Otherwise the
+first launch (including `doctor --only scix`) fetches `scix-mcp@1.1.0` into
+the worker user's npm cache. Allow npm registry access for this download
+and access to `api.adsabs.harvard.edu` for SciX queries.
 
 ```rust
 #[cfg(feature = "scix")]
