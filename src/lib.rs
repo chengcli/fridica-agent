@@ -7,8 +7,6 @@ pub mod codex;
 pub mod doctor;
 #[cfg(feature = "github")]
 pub mod github;
-#[cfg(any(feature = "scix", feature = "overleaf"))]
-mod npm_server;
 #[cfg(feature = "overleaf")]
 pub mod overleaf;
 #[cfg(feature = "scix")]

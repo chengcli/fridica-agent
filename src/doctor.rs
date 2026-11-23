@@ -155,7 +155,7 @@ async fn scix(_options: &Options) -> Check {
         bounded("scix", _options.timeout, async {
             crate::scix::probe()
                 .await
-                .map(|count| format!("SciX authenticated via MCP; {count} registered tools"))
+                .map(|count| format!("ADS accepted ADS_TOKEN; {count} tools"))
                 .map_err(|err| err.to_string())
         })
         .await
@@ -172,7 +172,7 @@ async fn overleaf(_options: &Options) -> Check {
         bounded("overleaf", _options.timeout, async {
             crate::overleaf::probe()
                 .await
-                .map(|count| format!("Overleaf MCP configured; {count} tools available; remote project access untested"))
+                .map(|count| format!("interleaf {}: OVERLEAF_GIT_TOKEN set; {count} tools; remote project access untested", interleaf::VERSION))
                 .map_err(|err| err.to_string())
         })
         .await
