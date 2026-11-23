@@ -253,20 +253,30 @@ the host's existing policy.
 
 ## Overleaf projects
 
-Enable the `overleaf` Cargo feature on the host. On the worker, install Node.js
-22.14 or newer, npm, and Git, then build the Fridica executables:
+Enable the `overleaf` Cargo feature. The server is
+[interleaf](https://github.com/happysky19/interleaf), compiled into
+`fridica-agent-overleaf` and into any host built with the feature: no Node.js and
+no download at first use. Workers need Git, and TeX Live (`latexmk`, `latexdiff`)
+for the compile and review tools.
 
 ```sh
 cargo install --locked --path . --features overleaf --bins
 fridica-agent doctor --only overleaf
 ```
 
-Set `OVERLEAF_GIT_TOKEN` in the worker environment. Supply the project URL in
-the request, set `OVERLEAF_PROJECT_ID` for a default, or configure aliases with
-`OVERLEAF_PROJECTS`. Workers can also point `OVERLEAF_MCP_ENV_FILE` at the
-absolute path to an upstream configuration file. Git operations need Overleaf
-Git integration. The upstream server also supports cookie-based editor tools
-via `OVERLEAF_SESSION_COOKIE_FILE`. [Overleaf MCP documentation](https://github.com/yangzichao/mcp-server-overleaf)
+Set `OVERLEAF_GIT_TOKEN` (Overleaf: Account Settings > Git Integration) in the
+worker environment, and `ADS_TOKEN` for citation checks against NASA ADS. Allow
+network access to `git.overleaf.com` and `api.adsabs.harvard.edu`. A request
+names its project by Overleaf link or id, or by any git URL (GitHub and GitLab
+use the worker's own git login); `OVERLEAF_PROJECT_ID` sets a default. Clones go
+in the session's working folder (`INTERLEAF_WORKSPACE` changes it), so the agent
+edits them with its own tools.
+
+Edits reach the shared copy as suggestions (`\sgadd`, `\sgdel`, `\sgrep`) that
+co-authors accept or reject. Push dry-runs by default, pulls first, merges edits
+on adjacent lines and never forces. Other tools check references, citations
+(against ADS), wording and journal limits, compile with errors at file:line, tie
+numbers and figures to their result files, and build a latexdiff review PDF.
 
 ```rust
 #[cfg(feature = "overleaf")]
@@ -275,10 +285,7 @@ fn enable_overleaf(spec: &mut fridica_agent::Spec) {
 }
 ```
 
-The wrapper uses `mcp-server-overleaf` on the worker's PATH or fetches version
-`0.4.1` into the worker's npm cache on first use. Missing credential configuration
-stops startup before the download. The host handles tool approvals, including
-project edits and pushes.
+The host handles tool approvals, including pushes.
 
 ## MCP doctor
 
@@ -300,7 +307,7 @@ GitHub uses `GH_TOKEN` (or the named variable), falling back to local `gh auth t
 it reads authenticated identity and reports the bundled tool count. alphaXiv
 uses `ALPHAXIV_TOKEN`, authenticates MCP, and lists the available research tools.
 SciX calls the upstream server’s health check, which requests one record ID to verify authentication.
-Overleaf lists tools and checks local project configuration. Remote project access is untested.
+Overleaf checks `OVERLEAF_GIT_TOKEN` and lists the bundled tools. Remote project access is untested.
 An identity check does not prove write permission to any particular repository.
 
 The checks run concurrently with a per-service timeout (default 30 seconds,
