@@ -28,7 +28,7 @@ pub fn run() -> Result<()> {
 
 /// Check the worker's Overleaf credential and list the bundled tools, without cloning a
 /// project or contacting Overleaf.
-pub fn probe() -> Result<usize> {
+pub async fn probe() -> Result<usize> {
     ensure!(
         std::env::var("OVERLEAF_GIT_TOKEN").is_ok_and(|t| !t.trim().is_empty()),
         "set OVERLEAF_GIT_TOKEN on this worker"

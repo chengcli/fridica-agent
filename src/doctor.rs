@@ -171,6 +171,7 @@ async fn overleaf(_options: &Options) -> Check {
     {
         bounded("overleaf", _options.timeout, async {
             crate::overleaf::probe()
+                .await
                 .map(|count| format!("interleaf {}: OVERLEAF_GIT_TOKEN set; {count} tools; remote project access untested", interleaf::VERSION))
                 .map_err(|err| err.to_string())
         })
