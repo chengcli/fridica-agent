@@ -224,6 +224,30 @@ fixed diagnostics rather than printing credentials or upstream response bodies.
 Run `cargo test --locked --features alphaxiv` for mock HTTP/SSE coverage. Live
 alphaXiv authentication and quota-dependent searches require your own API key.
 
+## Upgrading the Overleaf and NASA ADS (SciX) servers to 0.4.6
+
+Version 0.4.6 bundles both stdio MCP servers in Rust. Existing worker specs
+can keep their `overleaf` and `scix` server names and executable paths. To
+replace the npm-backed binaries, run this from the 0.4.6 checkout on each
+worker and ensure the installed binaries are on the worker's `PATH`:
+
+```sh
+cargo install --locked --path . --features overleaf,scix --bins
+```
+
+If the worker also uses the GitHub or alphaXiv doctor checks, include
+`github` or `alphaxiv` in the same feature list when reinstalling.
+
+- **Overleaf.** Migrate cookie or token-file setups to `OVERLEAF_GIT_TOKEN`
+  in the worker environment. Replace `OVERLEAF_PROJECTS` aliases with a project
+  link or ID per request, or set `OVERLEAF_PROJECT_ID` for a default. Use
+  `INTERLEAF_WORKSPACE` for a custom checkout directory. The bundled server
+  edits Git checkouts and drops the old cookie-based editor tools.
+- **ADS.** Keep the worker's `ADS_TOKEN`. Update callers that pass
+  `response_format` to omit it. Use `fridica-agent doctor --only scix` in
+  place of the old `health_check` tool. The bundled server supports the
+  [SciX tools listed below](#literature-research-with-nasa-scix).
+
 ## Literature research with NASA SciX
 
 Enable the `scix` Cargo feature. `fridica-agent-scix` calls the
@@ -308,8 +332,9 @@ Fridica daemon configuration. Run it on each worker as that worker's user.
 GitHub uses `GH_TOKEN` (or the named variable), falling back to local `gh auth token`;
 it reads authenticated identity and reports the bundled tool count. alphaXiv
 uses `ALPHAXIV_TOKEN`, authenticates MCP, and lists the available research tools.
-SciX runs one empty ADS search to check `ADS_TOKEN`.
-Overleaf checks `OVERLEAF_GIT_TOKEN` and lists the bundled tools. Remote project access is untested.
+SciX requests zero results from ADS to verify that ADS accepts `ADS_TOKEN`.
+Overleaf checks that `OVERLEAF_GIT_TOKEN` is set and lists the bundled tools
+locally. To verify remote access, pull the intended project as the worker user.
 An identity check does not prove write permission to any particular repository.
 
 The checks run concurrently with a per-service timeout (default 30 seconds,
