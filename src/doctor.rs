@@ -155,7 +155,7 @@ async fn scix(_options: &Options) -> Check {
         bounded("scix", _options.timeout, async {
             crate::scix::probe()
                 .await
-                .map(|count| format!("SciX authenticated via MCP; {count} registered tools"))
+                .map(|count| format!("ADS accepted ADS_TOKEN; {count} tools"))
                 .map_err(|err| err.to_string())
         })
         .await
