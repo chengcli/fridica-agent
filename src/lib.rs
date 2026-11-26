@@ -99,12 +99,14 @@ pub struct McpServer {
     pub auto_approve: bool,
 }
 impl McpServer {
-    pub(crate) fn valid(&self) -> bool {
-        !self.name.is_empty()
-            && self
-                .name
+    pub(crate) fn valid_name(name: &str) -> bool {
+        !name.is_empty()
+            && name
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
+    }
+    pub(crate) fn valid(&self) -> bool {
+        Self::valid_name(&self.name)
             && !self.command.is_empty()
             && !self.command.contains('\0')
             && self.args.iter().all(|s| !s.contains('\0'))
@@ -152,7 +154,7 @@ pub struct ClientInfo {
 #[derive(Clone)]
 pub struct Options {
     pub client: ClientInfo,
-    /// Codex MCP servers to disable at startup.
+    /// Codex MCP servers to disable at startup. Names use ASCII letters, digits, _ or -.
     pub disabled_mcp_servers: Vec<String>,
     /// How long to wait for an exit status after output closes.
     pub eof_wait: Duration,

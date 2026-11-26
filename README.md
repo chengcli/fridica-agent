@@ -10,7 +10,10 @@ and `codex app-server` (JSON-RPC), and gives both the same interface:
   keeps it for later turns, and stops it on failure, idle timeout or `close()`.
   Dropping a turn's future cancels the turn.
 - **Approvals.** Command, tool, file-change and permission requests go to your
-  `Approver`; "approve for session" answers are cached per session.
+  `Approver`; "approve for session" answers are cached per session when the
+  request has a cache key. Codex MCP tool confirmations are approved per call,
+  without persistent server/tool grants. Other MCP input forms and URL prompts
+  remain unsupported.
 - **Interrupts.** `interrupt()` stops the current turn and keeps the session.
 - **Resume.** A turn can resume a backend session; if the backend no longer has
   it, the turn runs once in a fresh session.

@@ -267,7 +267,7 @@ async fn codex_turn_starts_a_thread_and_sends_the_output_schema() {
     );
     let command = launch.commands.lock().unwrap()[0].clone();
     assert_eq!(&command[..2], ["codex", "app-server"]);
-    assert!(command.contains(&"mcp_servers.\"me\".enabled=false".to_string()));
+    assert!(command.contains(&"mcp_servers.me.enabled=false".to_string()));
     let sent: Vec<_> = log
         .0
         .lock()
@@ -554,11 +554,11 @@ fn explicit_mcp_definitions_replace_ambient_entries_without_reading_secrets() {
     let words = codex::command(&s, &["github".into(), "ambient".into()]);
     let disabled = words
         .iter()
-        .position(|w| w == "mcp_servers.\"github\".enabled=false")
+        .position(|w| w == "mcp_servers.github.enabled=false")
         .unwrap();
     let explicit = words
         .iter()
-        .position(|w| w.starts_with("mcp_servers.\"github\"={"))
+        .position(|w| w.starts_with("mcp_servers.github={"))
         .unwrap();
     assert!(disabled < explicit);
     assert!(words[explicit].contains("env_vars=[\"WORKER_TOKEN\"]"));
@@ -596,14 +596,16 @@ async fn explicit_mcp_is_rejected_when_forbidden_duplicated_or_invalid() {
         env_vars: vec![],
         auto_approve: false,
     };
-    for kind in 0..4 {
+    for kind in 0..5 {
         let mut s = spec(Backend::Codex);
         s.mcp_servers = vec![server.clone()];
+        let mut options = Options::default();
         match kind {
             0 => s.forbid_mcp = true,
             1 => s.mcp_servers.push(server.clone()),
             2 => s.mcp_servers[0].name = "invalid.alias".into(),
-            _ => s.mcp_servers[0].env_vars.push("NOT-AN-ENV".into()),
+            3 => s.mcp_servers[0].env_vars.push("NOT-AN-ENV".into()),
+            _ => options.disabled_mcp_servers.push("invalid.alias".into()),
         }
         let launch = Arc::new(Launch {
             script: codex("ok"),
@@ -611,12 +613,130 @@ async fn explicit_mcp_is_rejected_when_forbidden_duplicated_or_invalid() {
         });
         let result = Agent::new(
             s,
-            Options::default(),
+            options,
             launch.clone(),
             Arc::new(Ids),
             Arc::new(Log::default()),
         );
         assert!(result.is_err());
         assert!(launch.commands.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn codex_mcp_tool_elicitations_reach_the_approver_without_persistent_grants() {
+    use ApprovalDecision::{Deny, Once, Session};
+    let accept = json!({"action":"accept","content":{},"_meta":null});
+    let decline = json!({"action":"decline","content":null,"_meta":null});
+    let params = json!({
+        "threadId":"thread-1","turnId":"turn-1","serverName":"overleaf",
+        "mode":"form","message":"Allow overleaf to run native_suggest_edit?",
+        "requestedSchema":{"type":"object","properties":{}},
+        "_meta":{
+            "codex_approval_kind":"mcp_tool_call","persist":["session","always"],
+            "tool_title":"Suggest an edit","tool_description":"Create a pending revision",
+            "tool_params":{"project_id":"project-1","path":"main.tex","old_string":"old",
+                "new_string":"new","expected_version":95,"strict_version":true,
+                "track":"on","operation_id":"00000000-0000-4000-8000-000000000002"},
+            "tool_params_display":[]
+        }
+    });
+    let mut form = params.clone();
+    form["requestedSchema"]["properties"] = json!({"password":{"type":"string"}});
+    let mut no_args = params.clone();
+    no_args["_meta"]
+        .as_object_mut()
+        .unwrap()
+        .remove("tool_params");
+    let mut invalid_args = params.clone();
+    invalid_args["_meta"]["tool_params"] = json!(["invalid"]);
+    let mut unrelated = params.clone();
+    unrelated["_meta"]["codex_approval_kind"] = json!("other");
+    for (decision, policy, p, expected, approval_count) in [
+        (Once, "on-request", params.clone(), accept.clone(), 2),
+        (Session, "on-request", params.clone(), accept.clone(), 2),
+        (Deny, "on-request", params.clone(), decline.clone(), 2),
+        (Once, "never", params.clone(), decline.clone(), 0),
+        (Once, "on-request", no_args, accept.clone(), 2),
+        (Once, "on-request", invalid_args, Value::Null, 0),
+        (Once, "on-request", form, Value::Null, 0),
+        (Once, "on-request", unrelated, Value::Null, 0),
+    ] {
+        let p_for_wire = p.clone();
+        let script: Script = Arc::new(move |m| {
+            let request =
+                |id| json!({"id":id,"method":"mcpServer/elicitation/request","params":p_for_wire});
+            match m["method"].as_str() {
+                Some("initialize") => vec![json!({"id":m["id"],"result":{}})],
+                Some("thread/start") => {
+                    vec![json!({"id":m["id"],"result":{"thread":{"id":"thread-1"}}})]
+                }
+                Some("turn/start") => vec![
+                    json!({"id":m["id"],"result":{"turn":{"id":"turn-1"}}}),
+                    request(701),
+                ],
+                _ if m["id"] == 701 => vec![request(702)],
+                _ if m["id"] == 702 => vec![
+                    json!({"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","item":{"type":"agentMessage","text":"done"}}}),
+                    json!({"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}}),
+                ],
+                _ => vec![],
+            }
+        });
+        let mut s = spec(Backend::Codex);
+        s.policy.approvals = policy.into();
+        let log = Arc::new(Log::default());
+        let approver = Arc::new(Decide(decision, Mutex::new(vec![])));
+        let agent = Agent::new(
+            s,
+            Options::default(),
+            Arc::new(Launch {
+                script,
+                commands: Mutex::new(vec![]),
+            }),
+            Arc::new(Ids),
+            log.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            agent
+                .run(turn("Review.", approver.clone(), None))
+                .await
+                .unwrap()
+                .text,
+            "done"
+        );
+        let requests = approver.1.lock().unwrap().clone();
+        assert_eq!(
+            requests.len(),
+            approval_count,
+            "{decision:?}, {policy}, {p}"
+        );
+        for request in requests {
+            assert_eq!(request.kind, "tool");
+            assert_eq!(request.detail, p);
+            assert_eq!(
+                request.summary,
+                "Allow overleaf to run native_suggest_edit?"
+            );
+            assert!(request.cache_key.is_empty());
+            assert!(["701", "702"].contains(&request.backend_request_id.as_str()));
+        }
+        let log = log.0.lock().unwrap().clone();
+        for id in [701, 702] {
+            let response = log
+                .iter()
+                .filter(|e| e["direction"] == "send_intent")
+                .map(|e| &e["message"])
+                .find(|m| m["id"] == id)
+                .unwrap();
+            if expected.is_null() {
+                assert_eq!(response["error"]["code"], -32601);
+            } else {
+                assert_eq!(response["result"], expected);
+                assert!(response.get("error").is_none());
+            }
+        }
+        agent.close().await.unwrap();
     }
 }

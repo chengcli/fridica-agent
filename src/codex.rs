@@ -40,13 +40,13 @@ pub fn command(spec: &Spec, disabled_mcp: &[String]) -> Vec<String> {
         ));
     }
     for name in disabled_mcp {
-        settings.push(format!("mcp_servers.{}.enabled=false", json!(name)));
+        settings.push(format!("mcp_servers.{name}.enabled=false"));
     }
     for server in &spec.mcp_servers {
         // Replace the entire entry, rather than merging ambient URL/env/headers.
         settings.push(format!(
             "mcp_servers.{}={{command={},args={},env_vars={},enabled=true{}}}",
-            json!(server.name),
+            server.name,
             json!(server.command),
             json!(server.args),
             json!(server.env_vars),
@@ -233,6 +233,19 @@ pub(crate) async fn dispatch(s: &mut Session, m: Value) -> Result<(), WireError>
         "item/commandExecution/requestApproval" | "execCommandApproval" => "command",
         "item/fileChange/requestApproval" | "applyPatchApproval" => "file_change",
         "item/permissions/requestApproval" => "permissions",
+        "mcpServer/elicitation/request"
+            if m["params"]["mode"] == "form"
+                && m["params"]["_meta"]["codex_approval_kind"] == "mcp_tool_call"
+                && m["params"]["requestedSchema"] == json!({"type":"object","properties":{}})
+                && (m["params"]["_meta"]["tool_params"].is_null()
+                    || m["params"]["_meta"]["tool_params"].is_object())
+                && m["params"]["serverName"]
+                    .as_str()
+                    .is_some_and(|v| !v.is_empty())
+                && m["params"]["message"].is_string() =>
+        {
+            "tool"
+        }
         _ => {
             let message = format!("not supported by {}", s.options.client.title);
             return s
@@ -256,6 +269,11 @@ pub(crate) async fn dispatch(s: &mut Session, m: Value) -> Result<(), WireError>
 /// The approval request for a Codex approval server request.
 pub fn describe(kind: &str, p: &Value, id: &str) -> ApprovalRequest {
     let (summary, detail, cache) = match kind {
+        "tool" => (
+            p["message"].as_str().unwrap_or("Use an MCP tool").into(),
+            p.clone(),
+            String::new(),
+        ),
         "command" => {
             let command = if let Some(words) = p["command"].as_array() {
                 words
@@ -315,6 +333,14 @@ pub fn describe(kind: &str, p: &Value, id: &str) -> ApprovalRequest {
 /// The JSON-RPC result for an approval decision.
 pub fn answer(method: &str, kind: &str, p: &Value, decision: ApprovalDecision) -> Value {
     use ApprovalDecision::*;
+    if kind == "tool" && method == "mcpServer/elicitation/request" {
+        // Do not turn an invocation approval into a persistent server/tool grant.
+        return if decision == Deny {
+            json!({"action":"decline","content":null,"_meta":null})
+        } else {
+            json!({"action":"accept","content":{},"_meta":null})
+        };
+    }
     if kind == "permissions" {
         return if decision == Deny {
             json!({"permissions":{}})
