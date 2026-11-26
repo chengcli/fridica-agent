@@ -267,7 +267,7 @@ async fn codex_turn_starts_a_thread_and_sends_the_output_schema() {
     );
     let command = launch.commands.lock().unwrap()[0].clone();
     assert_eq!(&command[..2], ["codex", "app-server"]);
-    assert!(command.contains(&"mcp_servers.\"me\".enabled=false".to_string()));
+    assert!(command.contains(&"mcp_servers.me.enabled=false".to_string()));
     let sent: Vec<_> = log
         .0
         .lock()
@@ -554,11 +554,11 @@ fn explicit_mcp_definitions_replace_ambient_entries_without_reading_secrets() {
     let words = codex::command(&s, &["github".into(), "ambient".into()]);
     let disabled = words
         .iter()
-        .position(|w| w == "mcp_servers.\"github\".enabled=false")
+        .position(|w| w == "mcp_servers.github.enabled=false")
         .unwrap();
     let explicit = words
         .iter()
-        .position(|w| w.starts_with("mcp_servers.\"github\"={"))
+        .position(|w| w.starts_with("mcp_servers.github={"))
         .unwrap();
     assert!(disabled < explicit);
     assert!(words[explicit].contains("env_vars=[\"WORKER_TOKEN\"]"));
@@ -596,14 +596,16 @@ async fn explicit_mcp_is_rejected_when_forbidden_duplicated_or_invalid() {
         env_vars: vec![],
         auto_approve: false,
     };
-    for kind in 0..4 {
+    for kind in 0..5 {
         let mut s = spec(Backend::Codex);
         s.mcp_servers = vec![server.clone()];
+        let mut options = Options::default();
         match kind {
             0 => s.forbid_mcp = true,
             1 => s.mcp_servers.push(server.clone()),
             2 => s.mcp_servers[0].name = "invalid.alias".into(),
-            _ => s.mcp_servers[0].env_vars.push("NOT-AN-ENV".into()),
+            3 => s.mcp_servers[0].env_vars.push("NOT-AN-ENV".into()),
+            _ => options.disabled_mcp_servers.push("invalid.alias".into()),
         }
         let launch = Arc::new(Launch {
             script: codex("ok"),
@@ -611,7 +613,7 @@ async fn explicit_mcp_is_rejected_when_forbidden_duplicated_or_invalid() {
         });
         let result = Agent::new(
             s,
-            Options::default(),
+            options,
             launch.clone(),
             Arc::new(Ids),
             Arc::new(Log::default()),

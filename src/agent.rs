@@ -105,7 +105,7 @@ impl Agent {
             || options
                 .disabled_mcp_servers
                 .iter()
-                .any(|s| s.is_empty() || s.contains('\0'))
+                .any(|s| !crate::McpServer::valid_name(s))
         {
             return Err(failure(
                 Failure::Refusal,

@@ -40,13 +40,13 @@ pub fn command(spec: &Spec, disabled_mcp: &[String]) -> Vec<String> {
         ));
     }
     for name in disabled_mcp {
-        settings.push(format!("mcp_servers.{}.enabled=false", json!(name)));
+        settings.push(format!("mcp_servers.{name}.enabled=false"));
     }
     for server in &spec.mcp_servers {
         // Replace the entire entry, rather than merging ambient URL/env/headers.
         settings.push(format!(
             "mcp_servers.{}={{command={},args={},env_vars={},enabled=true{}}}",
-            json!(server.name),
+            server.name,
             json!(server.command),
             json!(server.args),
             json!(server.env_vars),
