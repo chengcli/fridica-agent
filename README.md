@@ -227,6 +227,19 @@ fixed diagnostics rather than printing credentials or upstream response bodies.
 Run `cargo test --locked --features alphaxiv` for mock HTTP/SSE coverage. Live
 alphaXiv authentication and quota-dependent searches require your own API key.
 
+## Native Overleaf collaboration (development)
+
+The `overleaf` feature now re-exports Rust Interleaf's `login` module and
+`NativeSession`. Hosts use `run_native(session, authorize)` for native-only
+comments, pending Track Changes, live reads and snapshot compilation. The host
+retains account, project, expiry and task authorization; the callback runs before
+every tool call. `run()` remains the independent Git/LaTeX entry.
+
+Fridica owns sign-in and its OS credential store, then supplies the scoped session
+through memory pipes. No separate Overleaf MCP package or Node process is needed.
+This branch pins development Interleaf source; a registry publication must wait
+for a corresponding Interleaf package release.
+
 ## Upgrading the Overleaf and NASA ADS (SciX) servers to 0.4.6
 
 Version 0.4.6 bundles both stdio MCP servers in Rust. Existing worker specs
