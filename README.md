@@ -273,7 +273,11 @@ macOS acceptance remain pending. Use matching reviewed source revisions across
 Interleaf, fridica-agent and Fridica. Registry publication must wait for the
 matching Interleaf release and maintainer approval; retain package/publish
 dry-run and normal CI gates rather than bypassing a missing dependency API.
-See Fridica's [native integration guide](https://github.com/chengcli/fridica/blob/main/integrations/overleaf/README.md)
+Hosts can call `fridica_agent::overleaf::probe_git_access()` to verify read access
+when a default Git project is configured. The existing `probe()` checks Git tool
+discovery offline, and `probe_native()` checks the native tool catalog without credentials.
+
+See Fridica's [native integration guide](https://github.com/chengcli/fridica/blob/main/docs/overleaf-native-source-install.md)
 for the compact tool matrix and host policy.
 
 ## Upgrading the Overleaf and NASA ADS (SciX) servers to 0.4.6
