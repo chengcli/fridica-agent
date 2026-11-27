@@ -1,6 +1,6 @@
 [package]
 name = "fridica-agent"
-version = "0.4.8"
+version = "0.4.9"
 edition = "2021"
 rust-version = "1.89"
 description = "Drive Claude Code (stream-json) and Codex (app-server) sessions: approvals, interrupts, resume and structured results"
