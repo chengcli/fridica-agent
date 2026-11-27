@@ -227,6 +227,55 @@ fixed diagnostics rather than printing credentials or upstream response bodies.
 Run `cargo test --locked --features alphaxiv` for mock HTTP/SSE coverage. Live
 alphaXiv authentication and quota-dependent searches require your own API key.
 
+## Native Overleaf collaboration (development)
+
+The `overleaf` feature re-exports Rust Interleaf's `login` and `NativeSession`.
+`run_native(session, authorize)` serves the development native API: 33 canonical
+tools for project/file discovery and management, search, text/binary reads,
+versioned edits, comments, Track Changes, cloud compilation/log/label pages and
+native history/diff. Two additional helpers preserve pending-only
+`native_suggest_edit` and snapshot-based `native_compile_local` behavior.
+`native_compile` uses Overleaf's cloud compiler; only the local helper needs
+worker TeX Live/`latexmk`. `run()` remains the separate Git/LaTeX entry.
+
+The host authorizes every call and retains account, origin, project, channel,
+task and expiry restrictions. Fridica supplies the verified session through
+memory pipes; native operations run entirely in Rust, without Node, a Python
+adapter or a worker browser. Owner login supports an explicit HTTPS base URL for
+cloud or self-hosted Overleaf / Community Edition.
+
+With a matching Fridica development build, the owner signs in once:
+
+```sh
+fridica overleaf-auth login --expected-email owner@example.com
+# Self-hosted instance:
+fridica overleaf-auth login --base-url https://overleaf.example.org --expected-email owner@example.com
+# Existing sessions retain their seven authorized operations until this opt-in:
+fridica overleaf-auth grant --all
+```
+
+The grant needs no relogin and expands only tool capabilities, preserving saved
+account/project/channel/recipient/expiry limits. Unbound tasks may discover,
+search and read within scope. Every project call supplies `project_id`; writes
+require a host-confirmed project for the requesting thread. Account-level project
+creation requires an unbound task with unrestricted account/project scope.
+
+Mutations use stable UUIDs, durable intent and positive readback. Checking the
+same UUID reads its receipt; unknown/partial outcomes require read-only
+reconciliation, with no automatic replay or destructive rollback. Legacy
+suggestions stay pending. Canonical edits expose explicit tracking modes;
+accept/reject and deletion require precise selection and current state checks.
+Message edits are limited to the logged-in author; an explicit project owner
+may delete another author's content.
+
+This development source is not a deployed release. Expanded real-account and
+macOS acceptance remain pending. Use matching reviewed source revisions across
+Interleaf, fridica-agent and Fridica. Registry publication must wait for the
+matching Interleaf release and maintainer approval; retain package/publish
+dry-run and normal CI gates rather than bypassing a missing dependency API.
+See Fridica's [native integration guide](https://github.com/chengcli/fridica/blob/main/integrations/overleaf/README.md)
+for the compact tool matrix and host policy.
+
 ## Upgrading the Overleaf and NASA ADS (SciX) servers to 0.4.6
 
 Version 0.4.6 bundles both stdio MCP servers in Rust. Existing worker specs
@@ -280,7 +329,7 @@ other formats), and for the owner's ADS libraries `get_libraries`,
 `add_documents_by_query`. Deleting, sharing or transferring libraries is not
 exposed. Tool approvals follow the host's existing policy.
 
-## Overleaf projects
+## Overleaf projects (Git mode)
 
 Enable the `overleaf` Cargo feature. The server is
 [interleaf](https://github.com/happysky19/interleaf), compiled into
