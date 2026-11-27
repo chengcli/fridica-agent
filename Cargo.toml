@@ -12,7 +12,7 @@ categories = ["api-bindings", "asynchronous", "development-tools"]
 
 [features]
 default = []
-overleaf = ["dep:anyhow", "dep:interleaf"]
+overleaf = ["dep:anyhow", "dep:interleaf", "dep:reqwest"]
 scix = ["dep:anyhow", "dep:rmcp", "dep:reqwest", "tokio/io-std"]
 alphaxiv = ["dep:anyhow", "dep:rmcp", "dep:reqwest", "tokio/io-std"]
 github = ["dep:anyhow", "dep:octocrab", "dep:gix", "dep:base64", "dep:percent-encoding", "tokio/io-std", "tokio/process"]

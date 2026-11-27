@@ -1,4 +1,7 @@
 //! LaTeX papers on Overleaf (or any git remote) through the bundled interleaf MCP server.
+mod git;
+pub use git::probe_git_access;
+
 use crate::McpServer;
 use anyhow::{ensure, Context, Result};
 pub use interleaf::{
