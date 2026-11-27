@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "fridica-agent"
-version = "0.4.7"
+version = "0.4.8"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1784,12 +1784,14 @@ dependencies = [
 
 [[package]]
 name = "interleaf"
-version = "0.4.0"
-source = "git+https://github.com/happysky19/interleaf?rev=eadab9a629b5210bc270a90cd475248ef66d539c#eadab9a629b5210bc270a90cd475248ef66d539c"
+version = "0.5.0"
+source = "git+https://github.com/happysky19/interleaf?rev=d23d45db49667e430a6282151b4041b05c104679#d23d45db49667e430a6282151b4041b05c104679"
 dependencies = [
  "anyhow",
+ "base64 0.23.1",
  "html-escape",
  "nix",
+ "percent-encoding",
  "regex",
  "serde",
  "serde_json",

@@ -1,7 +1,9 @@
 //! LaTeX papers on Overleaf (or any git remote) through the bundled interleaf MCP server.
 use crate::McpServer;
 use anyhow::{ensure, Context, Result};
-pub use interleaf::{login, NativeSession};
+pub use interleaf::{
+    login, native_operation, native_operations, native_tool_is_mutation, NativeSession,
+};
 
 /// Variables interleaf reads on the execution target.
 const ENV_VARS: &[&str] = &[
@@ -66,9 +68,11 @@ pub fn probe_native() -> Result<usize> {
         .as_array()
         .context("native tools missing")?;
     ensure!(
-        tools
-            .iter()
-            .all(|t| t["name"].as_str().is_some_and(|n| n.starts_with("native_")))
+        tools.len() == native_operations().len() + 2
+            && native_operations().len() == 33
+            && tools
+                .iter()
+                .all(|t| t["name"].as_str().is_some_and(|n| n.starts_with("native_")))
             && tools.iter().any(|t| t["name"] == "native_suggest_edit")
             && tools.iter().any(|t| t["name"] == "native_reply_comment"),
         "native tool inventory invalid"
