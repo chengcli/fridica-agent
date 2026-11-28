@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "fridica-agent"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1784,9 +1784,9 @@ dependencies = [
 
 [[package]]
 name = "interleaf"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "277b606ea61c71f5c77d6122889389c02e7708948489276018d7f806ffb58d3f"
+checksum = "6b19cd9786d9aa6d41f0391c771dbb59274bf58cef7f491fc87255639b01601a"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
